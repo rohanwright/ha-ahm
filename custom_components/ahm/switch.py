@@ -5,7 +5,6 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -134,7 +133,6 @@ class AhmInputMuteSwitch(AhmBaseMuteSwitch):
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_mute_{input_num}"
         self._attr_name = f"AHM Input {input_num} Mute"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -155,7 +153,6 @@ class AhmZoneMuteSwitch(AhmBaseMuteSwitch):
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_mute_{zone_num}"
         self._attr_name = f"AHM Zone {zone_num} Mute"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -176,7 +173,6 @@ class AhmControlGroupMuteSwitch(AhmBaseMuteSwitch):
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_mute_{cg_num}"
         self._attr_name = f"AHM Control Group {cg_num} Mute"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""
@@ -197,7 +193,6 @@ class AhmRoomMuteSwitch(AhmBaseMuteSwitch):
         super().__init__(coordinator, room_num, "room")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_room_mute_{room_num}"
         self._attr_name = f"AHM Room {room_num} Mute"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get room data from coordinator."""

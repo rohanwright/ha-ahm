@@ -5,7 +5,6 @@ from typing import Any
 
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -133,7 +132,6 @@ class AhmInputLevelNumber(AhmBaseLevelNumber):
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_level_{input_num}"
         self._attr_name = f"AHM Input {input_num} Level"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -154,7 +152,6 @@ class AhmZoneLevelNumber(AhmBaseLevelNumber):
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_level_{zone_num}"
         self._attr_name = f"AHM Zone {zone_num} Level"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -175,7 +172,6 @@ class AhmControlGroupLevelNumber(AhmBaseLevelNumber):
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_level_{cg_num}"
         self._attr_name = f"AHM Control Group {cg_num} Level"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""
@@ -196,7 +192,6 @@ class AhmRoomLevelNumber(AhmBaseLevelNumber):
         super().__init__(coordinator, room_num, "room")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_room_level_{room_num}"
         self._attr_name = f"AHM Room {room_num} Level"
-        self._attr_entity_category = EntityCategory.CONFIG
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get room data from coordinator."""
@@ -234,7 +229,6 @@ class AhmCrosspointLevelNumber(CoordinatorEntity, NumberEntity):
         self._attr_native_max_value = MIDI_LEVEL_MAX
         self._attr_native_step = 1
         self._attr_native_unit_of_measurement = None
-        self._attr_mode = "box"
 
     @property
     def device_info(self) -> dict[str, Any]:

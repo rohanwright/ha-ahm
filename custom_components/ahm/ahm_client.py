@@ -647,8 +647,8 @@ class AhmClient:
             message = f"01010F02{dest_ch}{snd_n}{snd_ch}F7"
             result = await self.send_sysex(message)
             
-            if result and len(result) >= 7:
-                return result[6]
+            if result and len(result) >= 3:
+                return result[-2]
             return None
 
         except Exception as err:
@@ -702,10 +702,10 @@ class AhmClient:
             message = f"01010F03{dest_ch}{snd_n}{snd_ch}F7"
             result = await self.send_sysex(message)
             
-            if result and len(result) > 2:
-                return result[2] > 63
+            if result and len(result) >= 3:
+                return result[-2] > 63
             return None
-            
+
         except Exception as err:
             _LOGGER.error("Failed to get send mute %s %d->zone %d: %s", source_type, source_num, dest_zone, err)
             return None
