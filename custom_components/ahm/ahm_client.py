@@ -418,8 +418,8 @@ class AhmClient:
             message = f"00010B17{ch}F7"
             result = await self.send_sysex(message)
 
-            if result and len(result) >= 7:
-                return result[6]
+            if result and len(result) >= 9:
+                return result[8]
             return None
 
         except Exception as err:
@@ -477,8 +477,8 @@ class AhmClient:
             message = f"01010B17{ch}F7"
             result = await self.send_sysex(message)
 
-            if result and len(result) >= 7:
-                return result[6]
+            if result and len(result) >= 9:
+                return result[8]
             return None
 
         except Exception as err:
@@ -536,8 +536,8 @@ class AhmClient:
             message = f"02010B17{ch}F7"
             result = await self.send_sysex(message)
 
-            if result and len(result) >= 7:
-                return result[6]
+            if result and len(result) >= 9:
+                return result[8]
             return None
 
         except Exception as err:
@@ -595,8 +595,8 @@ class AhmClient:
             message = f"03010B17{ch}F7"
             result = await self.send_sysex(message)
 
-            if result and len(result) >= 7:
-                return result[6]
+            if result and len(result) >= 9:
+                return result[8]
             return None
 
         except Exception as err:

@@ -38,13 +38,45 @@ class AhmCoordinator(DataUpdateCoordinator):
             host=entry.data[CONF_HOST],
             version=entry.data.get(CONF_VERSION, "1.5")
         )
-        
+        self._push_task: asyncio.Task | None = None
+
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
+
+    def start_push_listener(self) -> None:
+        """Start the background task that applies real-time AHM push updates.
+
+        Must be called after the first successful data refresh so ``self.data``
+        is populated and ready to be updated.
+        """
+        if self._push_task is None or self._push_task.done():
+            self._push_task = asyncio.ensure_future(self._push_listener_loop())
+
+    async def _push_listener_loop(self) -> None:
+        """Background task: drain unsolicited AHM messages and apply them immediately.
+
+        The AHM sends MIDI push notifications whenever hardware state changes
+        (e.g. someone turns a knob or presses a mute button). This loop wakes
+        every 0.5 s, drains whatever has accumulated in the client's unsolicited
+        buffer, applies the updates to local data, and notifies HA listeners —
+        all without waiting for the 60-second poll.
+        """
+        while True:
+            try:
+                await asyncio.sleep(0.5)
+                messages = self.client.drain_unsolicited()
+                if messages and self.data:
+                    updated_data = {**self.data}
+                    if self._apply_unsolicited_updates(messages, updated_data):
+                        self.async_set_updated_data(updated_data)
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:  # pylint: disable=broad-except
+                _LOGGER.debug("Push listener error: %s", err)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -67,20 +99,8 @@ class AhmCoordinator(DataUpdateCoordinator):
         return {**self.entry.data, **self.entry.options}
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from AHM device."""
+        """Fetch data from AHM device (slow poll — real-time updates handled by push listener)."""
         try:
-            # Process any unsolicited updates that arrived since the last poll
-            # BEFORE starting fresh queries. This also prevents unsolicited packets
-            # from corrupting upcoming GET query responses.
-            unsolicited = self.client.drain_unsolicited()
-            if unsolicited and self.data:
-                updated_data = {**self.data}
-                changed = self._apply_unsolicited_updates(unsolicited, updated_data)
-                if changed:
-                    # Notify listeners immediately so HA state reflects the
-                    # hardware change without waiting for the full poll to finish.
-                    self.async_set_updated_data(updated_data)
-
             data = {}
             cfg = self.config
 
@@ -352,7 +372,14 @@ class AhmCoordinator(DataUpdateCoordinator):
         return await self.client.play_audio(track_id, channel)
 
     async def async_shutdown(self) -> None:
-        """Close the persistent connection to the AHM device."""
+        """Close the persistent connection and stop background tasks."""
+        if self._push_task is not None:
+            self._push_task.cancel()
+            try:
+                await self._push_task
+            except asyncio.CancelledError:
+                pass
+            self._push_task = None
         await self.client.async_disconnect()
 
     def _apply_unsolicited_updates(self, messages: list[bytes], data: dict[str, Any]) -> bool:
