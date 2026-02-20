@@ -42,11 +42,11 @@ play_audio:
         select:
           options:
             - label: "Mono 1"
-              value: 0
+              value: "0"
             - label: "Mono 2" 
-              value: 1
+              value: "1"
             - label: "Stereo"
-              value: 2
+              value: "2"
     entry_id:
       name: Device Entry ID
       description: >-

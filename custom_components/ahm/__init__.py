@@ -110,7 +110,7 @@ async def _async_register_services(hass: HomeAssistant, coordinator: AhmCoordina
         play_audio,
         schema=vol.Schema({
             vol.Required("track_id"): vol.All(int, vol.Range(min=0, max=127)),
-            vol.Optional("channel", default=0): vol.In([0, 1, 2]),
+            vol.Optional("channel", default=0): vol.All(vol.Coerce(int), vol.In([0, 1, 2])),
             vol.Optional("entry_id"): str,
         }),
     )
