@@ -110,8 +110,15 @@ class AhmClient:
         pushed by the AHM (e.g. when someone changes a level on the hardware)
         are captured in the queue rather than being silently dropped or being
         mistaken for a GET query response.
+
+        The AHM makes heavy use of MIDI running status — after the first CC of an
+        NRPN sequence (e.g. ``B0 63 CH``), subsequent messages on the same channel
+        omit the status byte (``62 17  06 LV`` rather than ``B0 62 17  B0 06 LV``).
+        The parser tracks the last status byte and reconstructs full messages from
+        bare data bytes so the coordinator always receives well-formed 3-byte CCs.
         """
         buf = bytearray()
+        last_status = 0  # MIDI running status: last channel-voice status byte seen
         try:
             while self._reader is not None:
                 try:
@@ -130,7 +137,7 @@ class AhmClient:
 
                 # Extract every complete MIDI message from the buffer.
                 while buf:
-                    msg, consumed = self._parse_next_midi(buf)
+                    msg, consumed, last_status = self._parse_next_midi(buf, last_status)
                     if msg is None:
                         break  # Need more bytes.
                     buf = buf[consumed:]
@@ -142,42 +149,76 @@ class AhmClient:
         _LOGGER.debug("Reader loop exited")
 
     @staticmethod
-    def _parse_next_midi(buf: bytearray) -> tuple[bytearray | None, int]:
-        """Extract the next complete MIDI message from *buf*.
+    def _parse_next_midi(
+        buf: bytearray, last_status: int = 0
+    ) -> tuple[bytearray | None, int, int]:
+        """Extract the next complete MIDI message from *buf*, honouring running status.
 
-        Returns ``(message, bytes_consumed)`` or ``(None, 0)`` if the buffer
-        does not yet contain a complete message.
+        MIDI running status allows senders to omit the status byte for consecutive
+        messages on the same channel/type.  The AHM uses this in NRPN sequences
+        and mute-response pairs.
+
+        Args:
+            buf:         Incoming byte buffer (at least 1 byte).
+            last_status: The most recent channel-voice status byte (0 if none yet).
+
+        Returns:
+            ``(message, bytes_consumed, new_last_status)``
+            or ``(None, 0, last_status)`` if the buffer is incomplete.
         """
         if not buf:
-            return None, 0
+            return None, 0, last_status
 
-        status = buf[0]
+        first = buf[0]
 
-        # SysEx: F0 ... F7
-        if status == 0xF0:
+        # ---- SysEx (F0 ... F7): resets running status ----
+        if first == 0xF0:
             end = buf.find(0xF7)
             if end == -1:
-                return None, 0  # Incomplete — wait for more bytes.
-            return bytearray(buf[:end + 1]), end + 1
+                return None, 0, last_status  # Incomplete — wait for more bytes.
+            return bytearray(buf[:end + 1]), end + 1, 0
 
-        # Real-time messages (single byte: F8-FF, excluding F0).
-        if status >= 0xF8:
-            return bytearray([status]), 1
+        # ---- Real-time (F8–FF): single byte, does NOT affect running status ----
+        if first >= 0xF8:
+            return bytearray([first]), 1, last_status
 
-        # Channel voice messages.
-        msg_type = status & 0xF0
-        if msg_type in (0x80, 0x90, 0xA0, 0xB0, 0xE0):  # 3-byte messages
-            if len(buf) < 3:
-                return None, 0
-            return bytearray(buf[:3]), 3
-        if msg_type in (0xC0, 0xD0):  # 2-byte messages
+        # ---- System common (F1–F7 excl. F0/F7): reset running status ----
+        if first >= 0xF0:
+            return bytearray([first]), 1, 0
+
+        # ---- Normal channel-voice status byte (80–7F) ----
+        if first >= 0x80:
+            msg_type = first & 0xF0
+            if msg_type in (0x80, 0x90, 0xA0, 0xB0, 0xE0):  # 3-byte
+                if len(buf) < 3:
+                    return None, 0, last_status  # Wait for data bytes.
+                return bytearray(buf[:3]), 3, first
+            if msg_type in (0xC0, 0xD0):  # 2-byte
+                if len(buf) < 2:
+                    return None, 0, last_status
+                return bytearray(buf[:2]), 2, first
+            # Unknown status — advance past it.
+            _LOGGER.debug("Unknown status byte: %02X", first)
+            return bytearray([first]), 1, 0
+
+        # ---- Data byte (00–7F): running status ----
+        # buf[0] is a data byte, not a status byte.  Re-use last_status to
+        # reconstruct the full message without consuming a status byte.
+        if last_status == 0:
+            # No previous status — nothing we can do, skip.
+            _LOGGER.debug("Orphan data byte (no running status): %02X", first)
+            return bytearray([first]), 1, last_status
+
+        msg_type = last_status & 0xF0
+        if msg_type in (0x80, 0x90, 0xA0, 0xB0, 0xE0):  # 3-byte: needs 2 data bytes
             if len(buf) < 2:
-                return None, 0
-            return bytearray(buf[:2]), 2
+                return None, 0, last_status
+            return bytearray([last_status, buf[0], buf[1]]), 2, last_status
+        if msg_type in (0xC0, 0xD0):  # 2-byte: needs 1 data byte
+            return bytearray([last_status, buf[0]]), 1, last_status
 
-        # Unknown status byte — skip it so the parser doesn't stall.
-        _LOGGER.debug("Skipping unknown MIDI byte: %02X", status)
-        return bytearray([status]), 1
+        # Shouldn't be reachable.
+        return bytearray([first]), 1, last_status
 
     def drain_unsolicited(self) -> list[bytes]:
         """Return all unsolicited messages received since the last call.
