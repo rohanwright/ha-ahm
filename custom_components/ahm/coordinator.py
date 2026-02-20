@@ -69,6 +69,18 @@ class AhmCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from AHM device."""
         try:
+            # Process any unsolicited updates that arrived since the last poll
+            # BEFORE starting fresh queries. This also prevents unsolicited packets
+            # from corrupting upcoming GET query responses.
+            unsolicited = self.client.drain_unsolicited()
+            if unsolicited and self.data:
+                updated_data = {**self.data}
+                changed = self._apply_unsolicited_updates(unsolicited, updated_data)
+                if changed:
+                    # Notify listeners immediately so HA state reflects the
+                    # hardware change without waiting for the full poll to finish.
+                    self.async_set_updated_data(updated_data)
+
             data = {}
             cfg = self.config
 
@@ -323,6 +335,89 @@ class AhmCoordinator(DataUpdateCoordinator):
     async def async_shutdown(self) -> None:
         """Close the persistent connection to the AHM device."""
         await self.client.async_disconnect()
+
+    def _apply_unsolicited_updates(self, messages: list[bytes], data: dict[str, Any]) -> bool:
+        """Parse unsolicited MIDI messages pushed by the AHM and apply to *data*.
+
+        The AHM sends MIDI channel messages when hardware controls are changed:
+          - Note On  (9N CH VL): mute state change for channel type N, channel CH
+          - CC NRPN  (BN 63 CH, BN 62 17, BN 06 LV): level change
+
+        Returns True if any state value was updated.
+        """
+        # Maps MIDI channel N → (data_key, label for logging)
+        _CH_MAP = {
+            0: "inputs",
+            1: "zones",
+            2: "control_groups",
+            3: "rooms",
+        }
+
+        updated = False
+
+        # NRPN parsing is stateful across three consecutive CC messages.
+        # Track the partial state: {midi_channel_n: (nrpn_msb, nrpn_lsb)}
+        nrpn_state: dict[int, tuple[int | None, int | None]] = {}
+
+        for msg in messages:
+            if not msg:
+                continue
+
+            status = msg[0]
+            msg_type = status & 0xF0
+            n = status & 0x0F  # MIDI channel (device type)
+
+            # ---- Note On: mute state ----------------------------------------
+            # Format (3 bytes): 9N CH VL
+            # VL > 63 = muted on, 1–63 = muted off, 0 = Note Off (ignore)
+            if msg_type == 0x90 and len(msg) == 3:
+                velocity = msg[2]
+                if velocity == 0:
+                    continue  # Note Off — not meaningful here.
+                ch_num = msg[1] + 1  # 0-indexed wire value → 1-indexed channel
+                muted = velocity > 63
+                data_key = _CH_MAP.get(n)
+                if data_key and data_key in data and ch_num in data[data_key]:
+                    data[data_key][ch_num]["muted"] = muted
+                    _LOGGER.debug(
+                        "Unsolicited mute: %s %d → %s",
+                        data_key, ch_num, "ON" if muted else "OFF",
+                    )
+                    updated = True
+                continue
+
+            # ---- Control Change: NRPN level ---------------------------------
+            # Three-message sequence per level change:
+            #   BN 63 CH   (NRPN MSB = channel index)
+            #   BN 62 17   (NRPN LSB = 0x17 → parameter "channel level")
+            #   BN 06 LV   (Data Entry MSB = level MIDI value)
+            if msg_type == 0xB0 and len(msg) == 3:
+                cc = msg[1]
+                val = msg[2]
+
+                if cc == 0x63:   # NRPN MSB: channel index
+                    nrpn_state[n] = (val, None)
+                elif cc == 0x62:  # NRPN LSB: parameter ID
+                    if n in nrpn_state and nrpn_state[n][0] is not None:
+                        nrpn_state[n] = (nrpn_state[n][0], val)
+                elif cc == 0x06:  # Data Entry MSB: value
+                    state = nrpn_state.get(n)
+                    if state and state[0] is not None and state[1] == 0x17:
+                        # Complete level NRPN for channel type N, channel state[0]
+                        ch_num = state[0] + 1  # 0-indexed → 1-indexed
+                        level_db = self.client._midi_to_db(val)
+                        data_key = _CH_MAP.get(n)
+                        if data_key and data_key in data and ch_num in data[data_key]:
+                            data[data_key][ch_num]["level"] = level_db
+                            _LOGGER.debug(
+                                "Unsolicited level: %s %d → %.1f dB",
+                                data_key, ch_num, level_db,
+                            )
+                            updated = True
+                    nrpn_state.pop(n, None)  # Reset state after value byte.
+                continue
+
+        return updated
 
     # Crosspoint control methods
     async def async_set_send_mute(self, source_num: int, dest_zone: int, muted: bool, is_zone_to_zone: bool = False) -> bool:

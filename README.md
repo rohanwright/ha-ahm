@@ -201,6 +201,20 @@ automation:
 - The integration uses a single persistent TCP connection for all communication
 - If the connection drops (e.g. device reboot), it reconnects automatically on the next poll cycle
 
+### Debug Logging
+
+To see every raw MIDI packet sent and received, enable debug logging for the integration in your `configuration.yaml`:
+
+```yaml
+logger:
+  logs:
+    custom_components.ahm: debug
+```
+
+Restart Home Assistant after adding this. Debug output will appear in the HA logs showing `TX:` (sent) and `RX:` (received) lines with the full hex bytes of each packet. This is useful for diagnosing protocol issues.
+
+To disable, remove the entry and restart again.
+
 ## Protocol Information
 
 This integration implements the AHM TCP/IP Protocol V1.5 using MIDI format messages over TCP/IP. For detailed protocol information, refer to the AHM documentation.
