@@ -1,0 +1,6 @@
+{
+  "name": "AHM Zone Mixer",
+  "content_in_root": false,
+  "country": "*",
+  "homeassistant": "2025.6.0"
+}

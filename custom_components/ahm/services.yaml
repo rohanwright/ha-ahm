@@ -1,0 +1,57 @@
+recall_preset:
+  name: Recall Preset
+  description: Recall a preset on the AHM device
+  fields:
+    preset_number:
+      name: Preset Number
+      description: The preset number to recall (1-500)
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+    entry_id:
+      name: Device Entry ID
+      description: >-
+        Target a specific AHM device by its config entry ID.
+        Only required when more than one AHM device is configured.
+      required: false
+      selector:
+        text:
+
+play_audio:
+  name: Play Audio
+  description: Trigger audio playback on the AHM device
+  fields:
+    track_id:
+      name: Track ID
+      description: The audio track ID to play (0-127)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 127
+          mode: box
+    channel:
+      name: Playback Channel
+      description: The playback channel to use
+      required: false
+      default: 0
+      selector:
+        select:
+          options:
+            - label: "Mono 1"
+              value: 0
+            - label: "Mono 2" 
+              value: 1
+            - label: "Stereo"
+              value: 2
+    entry_id:
+      name: Device Entry ID
+      description: >-
+        Target a specific AHM device by its config entry ID.
+        Only required when more than one AHM device is configured.
+      required: false
+      selector:
+        text:

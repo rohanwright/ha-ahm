@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "AHM Zone Mixer Setup",
+        "description": "Configure your Allen & Heath AHM Zone Mixer connection",
+        "data": {
+          "host": "IP Address",
+          "name": "Device Name",
+          "version": "Firmware Version"
+        }
+      },
+      "entities": {
+        "title": "Select Entities to Create",
+        "description": "Choose which inputs, zones, control groups, and rooms to control for {name}",
+        "data": {
+          "inputs": "Input Channels",
+          "zones": "Zone Outputs", 
+          "control_groups": "Control Groups",
+          "rooms": "Rooms"
+        }
+      },
+      "zone_crosspoints": {
+        "title": "Zone {zone_number} Send Configuration {progress}",
+        "description": "Select which inputs and zones should have send controls to Zone {zone_number}.\n\nAvailable: {input_count} inputs, {zone_count} zones\n\nFor each selection, both level and mute controls will be created.",
+        "data": {
+          "input_sends": "Input-to-Zone Sends",
+          "zone_sends": "Zone-to-Zone Sends"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the AHM device. Please check the IP address and ensure the device is online.",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Entity Selection",
+        "description": "Modify which inputs, zones, control groups and rooms are controlled. Crosspoint sends will be reconfigured in the following steps.",
+        "data": {
+          "inputs": "Input Channels",
+          "zones": "Zone Outputs",
+          "control_groups": "Control Groups",
+          "rooms": "Rooms"
+        }
+      },
+      "zone_crosspoints": {
+        "title": "Zone {zone_number} Send Configuration {progress}",
+        "description": "Select which inputs and zones should have send controls to Zone {zone_number}.\n\nAvailable: {input_count} inputs, {zone_count} zones\n\nFor each selection, both level and mute controls will be created.",
+        "data": {
+          "input_sends": "Input-to-Zone Sends",
+          "zone_sends": "Zone-to-Zone Sends"
+        }
+      }
+    }
+  }
+}

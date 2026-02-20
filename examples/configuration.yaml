@@ -1,0 +1,199 @@
+# Example configuration for AHM Zone Mixer integration
+# This integration is configured via the UI, but here are some automation examples
+
+# Example automation: Mute all inputs during announcements
+automation:
+  - alias: "PA System - Mute inputs during announcement"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.pa_announcement
+        to: 'on'
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id:
+            - switch.ahm_input_1_mute
+            - switch.ahm_input_2_mute
+            - switch.ahm_input_3_mute
+            - switch.ahm_input_4_mute
+      - service: ahm.recall_preset
+        data:
+          preset_number: 10  # Announcement preset
+
+  - alias: "PA System - Restore inputs after announcement" 
+    trigger:
+      - platform: state
+        entity_id: input_boolean.pa_announcement
+        to: 'off'
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id:
+            - switch.ahm_input_1_mute
+            - switch.ahm_input_2_mute
+            - switch.ahm_input_3_mute
+            - switch.ahm_input_4_mute
+      - service: ahm.recall_preset
+        data:
+          preset_number: 1   # Normal operation preset
+
+# Example script: Emergency evacuation audio
+script:
+  emergency_evacuation:
+    alias: "Emergency Evacuation Announcement"
+    sequence:
+      - service: ahm.recall_preset
+        data:
+          preset_number: 99  # Emergency preset
+      - service: ahm.play_audio
+        data:
+          track_id: 127     # Emergency evacuation track
+          channel: 2        # Stereo
+      - delay: '00:00:30'   # 30 second announcement
+      - service: ahm.recall_preset
+        data:
+          preset_number: 1  # Return to normal
+
+# Example scene: Conference room setup
+scene:
+  - name: "Conference Room Active"
+    entities:
+      media_player.ahm_zone_1:
+        volume_level: 0.7   # 70% volume
+        is_volume_muted: false
+      media_player.ahm_zone_2:
+        volume_level: 0.7
+        is_volume_muted: false
+      number.ahm_input_1_level:
+        value: -6           # -6dB for conference microphone
+      number.ahm_input_2_level:
+        value: -10          # -10dB for presentation audio
+
+  - name: "Conference Room Standby"
+    entities:
+      media_player.ahm_zone_1:
+        is_volume_muted: true
+      media_player.ahm_zone_2:
+        is_volume_muted: true
+      number.ahm_input_1_level:
+        value: -20          # Lower standby levels
+      number.ahm_input_2_level:
+        value: -20
+
+# Example template sensors for monitoring
+template:
+  - sensor:
+      - name: "AHM Zone 1 Volume dB"
+        state: "{{ state_attr('number.ahm_zone_1_level', 'value') }}"
+        unit_of_measurement: "dB"
+        device_class: sound_pressure
+        
+      - name: "AHM Active Inputs"
+        state: >
+          {% set inputs = [
+            'switch.ahm_input_1_mute',
+            'switch.ahm_input_2_mute', 
+            'switch.ahm_input_3_mute',
+            'switch.ahm_input_4_mute'
+          ] %}
+          {{ inputs | selectattr('states', 'eq', 'off') | list | count }}
+        attributes:
+          unmuted_inputs: >
+            {% set inputs = [
+              'switch.ahm_input_1_mute',
+              'switch.ahm_input_2_mute',
+              'switch.ahm_input_3_mute', 
+              'switch.ahm_input_4_mute'
+            ] %}
+            {{ inputs | selectattr('states', 'eq', 'off') | map('regex_replace', 'switch.ahm_input_(\d+)_mute', 'Input \\1') | list }}
+
+# Example input boolean for PA system control
+input_boolean:
+  pa_announcement:
+    name: "PA Announcement Active"
+    icon: mdi:microphone
+
+# Example input number for master volume control
+input_number:
+  master_volume:
+    name: "Master Volume"
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:volume-high
+
+# Example automation to sync master volume with zones
+automation:
+  - alias: "Sync Master Volume to Zones"
+    trigger:
+      - platform: state
+        entity_id: input_number.master_volume
+    action:
+      - service: media_player.volume_set
+        target:
+          entity_id:
+            - media_player.ahm_zone_1
+            - media_player.ahm_zone_2
+            - media_player.ahm_zone_3        data:
+          volume_level: "{{ states('input_number.master_volume') | float / 100 }}"
+
+  # Example automation using crosspoint controls for smart routing
+  - alias: "Meeting Room Audio Routing"
+    description: "Route microphone to meeting rooms when PA is active"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.pa_announcement
+        to: 'on'
+    action:
+      # Unmute microphone sends to meeting room zones
+      - service: switch.turn_off
+        target:
+          entity_id:
+            - switch.input_1_to_zone_2_send_mute  # Microphone to Meeting Room A
+            - switch.input_1_to_zone_3_send_mute  # Microphone to Meeting Room B
+      # Set appropriate send levels for announcements
+      - service: number.set_value
+        target:
+          entity_id:
+            - number.input_1_to_zone_2_send_level
+            - number.input_1_to_zone_3_send_level
+        data:
+          value: -10  # Moderate level for PA announcements
+
+  - alias: "End Meeting Room Audio Routing"
+    description: "Mute microphone sends when PA is inactive"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.pa_announcement
+        to: 'off'
+    action:
+      # Mute microphone sends to meeting room zones
+      - service: switch.turn_on
+        target:
+          entity_id:
+            - switch.input_1_to_zone_2_send_mute
+            - switch.input_1_to_zone_3_send_mute
+
+  # Example automation for zone-to-zone feeds
+  - alias: "Background Music to Overflow Areas"
+    description: "Route main lounge audio to overflow areas when busy"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.lounge_occupancy
+        to: 'on'
+    action:
+      # Enable zone-to-zone send from main lounge to overflow areas
+      - service: switch.turn_off
+        target:
+          entity_id:
+            - switch.zone_1_to_zone_4_send_mute  # Main Lounge to Overflow A
+            - switch.zone_1_to_zone_5_send_mute  # Main Lounge to Overflow B
+      # Set appropriate levels
+      - service: number.set_value
+        target:
+          entity_id:
+            - number.zone_1_to_zone_4_send_level
+            - number.zone_1_to_zone_5_send_level
+        data:
+          value: -20  # Lower level for background music

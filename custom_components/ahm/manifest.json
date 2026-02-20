@@ -1,0 +1,13 @@
+{
+  "domain": "ahm",
+  "name": "Allen & Heath AHM Zone Mixer",
+  "codeowners": ["@rohanwright"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/rohanwright/ha-ahm",
+  "homeassistant": "2025.6.0",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/rohanwright/ha-ahm/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

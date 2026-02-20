@@ -1,0 +1,55 @@
+"""Constants for the AHM integration."""
+from typing import Final
+
+DOMAIN: Final = "ahm"
+
+# Default values
+DEFAULT_NAME = "AHM Zone Mixer"
+DEFAULT_PORT = 51325
+DEFAULT_VERSION = "1.5"
+
+# Configuration
+CONF_HOST = "host"
+CONF_NAME = "name"
+CONF_VERSION = "version" 
+CONF_INPUTS = "inputs"
+CONF_ZONES = "zones"
+CONF_CONTROL_GROUPS = "control_groups"
+CONF_ROOMS = "rooms"
+CONF_INPUT_TO_ZONE_SENDS = "input_to_zone_sends"
+CONF_ZONE_TO_ZONE_SENDS = "zone_to_zone_sends"
+
+# Update intervals
+UPDATE_INTERVAL = 5  # seconds
+
+# Device limits
+MAX_INPUTS = 64
+MAX_ZONES = 64
+MAX_CONTROL_GROUPS = 32
+MAX_ROOMS = 16
+MAX_PRESETS = 500
+
+# Audio playback channels
+PLAYBACK_CHANNELS = {
+    0: "Mono 1",
+    1: "Mono 2", 
+    2: "Stereo"
+}
+
+# Entity types
+ENTITY_TYPE_INPUT = "input"
+ENTITY_TYPE_ZONE = "zone"
+ENTITY_TYPE_CONTROL_GROUP = "control_group"
+ENTITY_TYPE_ROOM = "room"
+ENTITY_TYPE_CROSSPOINT = "crosspoint"
+ENTITY_TYPE_INPUT_TO_ZONE_SEND = "input_to_zone_send"
+ENTITY_TYPE_ZONE_TO_ZONE_SEND = "zone_to_zone_send"
+
+# Crosspoint types
+CROSSPOINT_TYPE_INPUT_TO_ZONE = "input_to_zone"
+CROSSPOINT_TYPE_ZONE_TO_ZONE = "zone_to_zone"
+
+# Level conversion constants
+MIN_DB = -48
+MAX_DB = 10
+DB_RANGE = MAX_DB - MIN_DB

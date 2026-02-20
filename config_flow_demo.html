@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AHM Zone Mixer - Configuration Flow Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #111111;
+            color: #e1e1e1;
+            line-height: 1.6;
+        }
+
+        .ha-dialog {
+            max-width: 500px;
+            margin: 50px auto;
+            background: #1f1f1f;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .ha-dialog-header {
+            background: #2c2c2c;
+            padding: 20px;
+            border-bottom: 1px solid #3c3c3c;
+        }
+
+        .ha-dialog-title {
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .ha-dialog-subtitle {
+            color: #a0a0a0;
+            font-size: 14px;
+        }
+
+        .ha-dialog-content {
+            padding: 24px;
+        }
+
+        .ha-form-group {
+            margin-bottom: 20px;
+        }
+
+        .ha-form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #e1e1e1;
+        }
+
+        .ha-form-input {
+            width: 100%;
+            padding: 12px;
+            background: #2c2c2c;
+            border: 1px solid #3c3c3c;
+            border-radius: 4px;
+            color: #e1e1e1;
+            font-size: 14px;
+        }
+
+        .ha-form-input:focus {
+            outline: none;
+            border-color: #03a9f4;
+            box-shadow: 0 0 0 2px rgba(3, 169, 244, 0.2);
+        }
+
+        .ha-multi-select {
+            background: #2c2c2c;
+            border: 1px solid #3c3c3c;
+            border-radius: 4px;
+            min-height: 120px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .ha-checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .ha-checkbox-item:hover {
+            background: #3c3c3c;
+        }
+
+        .ha-checkbox {
+            margin-right: 12px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .ha-checkbox-label {
+            flex: 1;
+            color: #e1e1e1;
+        }
+
+        .ha-description {
+            color: #a0a0a0;
+            font-size: 13px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .ha-dialog-actions {
+            padding: 20px 24px;
+            background: #2c2c2c;
+            border-top: 1px solid #3c3c3c;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .ha-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .ha-button-primary {
+            background: #03a9f4;
+            color: white;
+        }
+
+        .ha-button-primary:hover {
+            background: #0288d1;
+        }
+
+        .ha-button-secondary {
+            background: transparent;
+            color: #03a9f4;
+            border: 1px solid #03a9f4;
+        }
+
+        .ha-button-secondary:hover {
+            background: rgba(3, 169, 244, 0.1);
+        }
+
+        .ha-error {
+            color: #f44336;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .ha-progress {
+            background: #3c3c3c;
+            height: 4px;
+            border-radius: 2px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .ha-progress-bar {
+            height: 100%;
+            background: #03a9f4;
+            transition: width 0.3s ease;
+        }
+
+        .ha-step-indicator {
+            color: #a0a0a0;
+            font-size: 12px;
+            text-align: right;
+            margin-bottom: 8px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .ha-info-box {
+            background: rgba(3, 169, 244, 0.1);
+            border: 1px solid rgba(3, 169, 244, 0.3);
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .ha-info-box-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #03a9f4;
+        }
+
+        .ha-info-box-text {
+            font-size: 13px;
+            color: #b0b0b0;
+        }
+
+        .ha-summary {
+            background: #2a2a2a;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .ha-summary-title {
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .ha-summary-item {
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: #b0b0b0;
+        }
+    </style>
+</head>
+<body>
+    <div class="ha-dialog">
+        <!-- Step 1: Device Configuration -->
+        <div id="step-user" class="config-step">
+            <div class="ha-dialog-header">
+                <div class="ha-dialog-title">Add AHM Zone Mixer</div>
+                <div class="ha-dialog-subtitle">Configure device connection</div>
+            </div>
+            <div class="ha-dialog-content">
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Host</label>
+                    <input type="text" class="ha-form-input" id="host" placeholder="192.168.1.100" value="192.168.1.100">
+                </div>
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Name</label>
+                    <input type="text" class="ha-form-input" id="name" value="AHM Zone Mixer">
+                </div>
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Firmware Version</label>
+                    <input type="text" class="ha-form-input" id="version" value="1.5">
+                </div>
+                <div id="connection-error" class="ha-error hidden">Cannot connect to device</div>
+            </div>
+            <div class="ha-dialog-actions">
+                <button class="ha-button ha-button-primary" onclick="nextStep('entities')">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Entity Selection -->
+        <div id="step-entities" class="config-step hidden">
+            <div class="ha-dialog-header">
+                <div class="ha-dialog-title">Select Entities</div>
+                <div class="ha-dialog-subtitle">Choose which inputs and outputs to control</div>
+            </div>
+            <div class="ha-dialog-content">
+                <div class="ha-description">
+                    Select the inputs, zones, control groups, and rooms you want to control in Home Assistant.
+                </div>
+                
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Inputs</label>
+                    <div class="ha-multi-select" id="inputs-select">
+                        <!-- Generated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Zones</label>
+                    <div class="ha-multi-select" id="zones-select">
+                        <!-- Generated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Control Groups</label>
+                    <div class="ha-multi-select" id="control-groups-select">
+                        <!-- Generated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="ha-form-group">
+                    <label class="ha-form-label">Rooms</label>
+                    <div class="ha-multi-select" id="rooms-select">
+                        <!-- Generated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            <div class="ha-dialog-actions">
+                <button class="ha-button ha-button-secondary" onclick="prevStep('user')">Back</button>
+                <button class="ha-button ha-button-primary" onclick="checkZonesAndNext()">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Crosspoint Configuration -->
+        <div id="step-crosspoints" class="config-step hidden">
+            <div class="ha-dialog-header">
+                <div class="ha-dialog-title">Configure Crosspoints</div>
+                <div class="ha-dialog-subtitle">Set up send (routing) controls</div>
+            </div>
+            <div class="ha-dialog-content">
+                <div class="ha-description">
+                    Crosspoints allow routing audio from inputs or zones to other zones with independent level and mute control.
+                    Selected zones: <span id="selected-zones-list"></span>
+                </div>
+                
+                <div class="ha-info-box">
+                    <div class="ha-info-box-title">About Crosspoints</div>
+                    <div class="ha-info-box-text">
+                        For each zone, you can create send controls from inputs and other zones. This enables complex routing scenarios like PA announcements, background music distribution, and conference room audio routing.
+                    </div>
+                </div>
+
+                <div class="ha-form-group">
+                    <label class="ha-checkbox-item">
+                        <input type="checkbox" class="ha-checkbox" id="configure-crosspoints" checked>
+                        <span class="ha-checkbox-label">Configure crosspoint (send) controls</span>
+                    </label>
+                </div>
+            </div>
+            <div class="ha-dialog-actions">
+                <button class="ha-button ha-button-secondary" onclick="prevStep('entities')">Back</button>
+                <button class="ha-button ha-button-primary" onclick="checkCrosspointsAndNext()">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Zone Crosspoint Configuration -->
+        <div id="step-zone-crosspoints" class="config-step hidden">
+            <div class="ha-dialog-header">
+                <div class="ha-step-indicator" id="zone-progress">Zone 1 of 3</div>
+                <div class="ha-progress">
+                    <div class="ha-progress-bar" id="progress-bar" style="width: 33%"></div>
+                </div>
+                <div class="ha-dialog-title">Configure Zone <span id="current-zone">1</span> Crosspoints</div>
+                <div class="ha-dialog-subtitle">Select which sources should send to this zone</div>
+            </div>
+            <div class="ha-dialog-content">
+                <div class="ha-description" id="zone-description">
+                    Select which inputs and zones should have send controls to Zone <span id="current-zone-desc">1</span>.
+                    This will create level and mute controls for routing audio to this zone.
+                </div>
+
+                <div class="ha-form-group" id="input-sends-group">
+                    <label class="ha-form-label">Input Sends to Zone <span id="current-zone-inputs">1</span></label>
+                    <div class="ha-multi-select" id="input-sends-select">
+                        <!-- Generated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="ha-form-group" id="zone-sends-group">
+                    <label class="ha-form-label">Zone Sends to Zone <span id="current-zone-zones">1</span></label>
+                    <div class="ha-multi-select" id="zone-sends-select">
+                        <!-- Generated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            <div class="ha-dialog-actions">
+                <button class="ha-button ha-button-secondary" onclick="prevZoneStep()">Back</button>
+                <button class="ha-button ha-button-primary" onclick="nextZoneStep()">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 5: Final Summary -->
+        <div id="step-summary" class="config-step hidden">
+            <div class="ha-dialog-header">
+                <div class="ha-dialog-title">Configuration Complete</div>
+                <div class="ha-dialog-subtitle">Review your settings</div>
+            </div>
+            <div class="ha-dialog-content">
+                <div class="ha-description">
+                    Your AHM Zone Mixer will be configured with the following entities:
+                </div>
+
+                <div class="ha-summary" id="entity-summary">
+                    <!-- Generated by JavaScript -->
+                </div>
+
+                <div class="ha-summary" id="crosspoint-summary">
+                    <!-- Generated by JavaScript -->
+                </div>
+            </div>
+            <div class="ha-dialog-actions">
+                <button class="ha-button ha-button-secondary" onclick="prevStep('crosspoints')">Back</button>
+                <button class="ha-button ha-button-primary" onclick="finishSetup()">Create Integration</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration state
+        const config = {
+            host: '192.168.1.100',
+            name: 'AHM Zone Mixer',
+            version: '1.5',
+            inputs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            zones: [1, 2, 3, 4, 5, 6, 7, 8],
+            controlGroups: [],
+            rooms: [],
+            configureCrosspoints: true,
+            inputToZoneSends: {},
+            zoneToZoneSends: {},
+            currentZoneIndex: 0
+        };
+
+        // Initialize the demo
+        function init() {
+            createMultiSelect('inputs-select', 64, 'Input', config.inputs);
+            createMultiSelect('zones-select', 64, 'Zone', config.zones);
+            createMultiSelect('control-groups-select', 32, 'Control Group', config.controlGroups);
+            createMultiSelect('rooms-select', 16, 'Room', config.rooms);
+        }
+
+        function createMultiSelect(containerId, maxItems, prefix, selectedItems = []) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            for (let i = 1; i <= maxItems; i++) {
+                const item = document.createElement('div');
+                item.className = 'ha-checkbox-item';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'ha-checkbox';
+                checkbox.id = `${containerId}-${i}`;
+                checkbox.checked = selectedItems.includes(i);
+                
+                const label = document.createElement('span');
+                label.className = 'ha-checkbox-label';
+                label.textContent = `${prefix} ${i}`;
+                
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                container.appendChild(item);
+                
+                // Add click handler for the entire item
+                item.addEventListener('click', (e) => {
+                    if (e.target !== checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                    }
+                });
+            }
+        }
+
+        function getSelectedItems(containerId) {
+            const container = document.getElementById(containerId);
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => parseInt(cb.id.split('-').pop()));
+        }
+
+        function nextStep(stepId) {
+            // Hide current step
+            document.querySelectorAll('.config-step').forEach(step => step.classList.add('hidden'));
+            
+            // Update config from current step
+            updateConfig();
+            
+            // Show next step
+            document.getElementById(`step-${stepId}`).classList.remove('hidden');
+        }
+
+        function prevStep(stepId) {
+            document.querySelectorAll('.config-step').forEach(step => step.classList.add('hidden'));
+            document.getElementById(`step-${stepId}`).classList.remove('hidden');
+        }
+
+        function updateConfig() {
+            config.host = document.getElementById('host')?.value || config.host;
+            config.name = document.getElementById('name')?.value || config.name;
+            config.version = document.getElementById('version')?.value || config.version;
+            
+            if (document.getElementById('inputs-select')) {
+                config.inputs = getSelectedItems('inputs-select');
+                config.zones = getSelectedItems('zones-select');
+                config.controlGroups = getSelectedItems('control-groups-select');
+                config.rooms = getSelectedItems('rooms-select');
+            }
+        }
+
+        function checkZonesAndNext() {
+            updateConfig();
+            
+            if (config.zones.length > 0) {
+                // Show zones list in crosspoints step
+                document.getElementById('selected-zones-list').textContent = 
+                    config.zones.map(z => `Zone ${z}`).join(', ');
+                nextStep('crosspoints');
+            } else {
+                nextStep('summary');
+                generateSummary();
+            }
+        }
+
+        function checkCrosspointsAndNext() {
+            config.configureCrosspoints = document.getElementById('configure-crosspoints').checked;
+            
+            if (config.configureCrosspoints && config.zones.length > 0) {
+                config.currentZoneIndex = 0;
+                config.inputToZoneSends = {};
+                config.zoneToZoneSends = {};
+                setupZoneCrosspointStep();
+                nextStep('zone-crosspoints');
+            } else {
+                nextStep('summary');
+                generateSummary();
+            }
+        }
+
+        function setupZoneCrosspointStep() {
+            const currentZone = config.zones[config.currentZoneIndex];
+            const totalZones = config.zones.length;
+            const progress = ((config.currentZoneIndex + 1) / totalZones) * 100;
+            
+            // Update UI
+            document.getElementById('zone-progress').textContent = `Zone ${config.currentZoneIndex + 1} of ${totalZones}`;
+            document.getElementById('progress-bar').style.width = `${progress}%`;
+            document.getElementById('current-zone').textContent = currentZone;
+            document.getElementById('current-zone-desc').textContent = currentZone;
+            document.getElementById('current-zone-inputs').textContent = currentZone;
+            document.getElementById('current-zone-zones').textContent = currentZone;
+            
+            // Create input sends selector
+            const inputSendsContainer = document.getElementById('input-sends-select');
+            inputSendsContainer.innerHTML = '';
+            
+            if (config.inputs.length > 0) {
+                config.inputs.forEach(input => {
+                    const item = document.createElement('div');
+                    item.className = 'ha-checkbox-item';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'ha-checkbox';
+                    checkbox.id = `input-send-${input}`;
+                    
+                    const label = document.createElement('span');
+                    label.className = 'ha-checkbox-label';
+                    label.textContent = `Input ${input}`;
+                    
+                    item.appendChild(checkbox);
+                    item.appendChild(label);
+                    inputSendsContainer.appendChild(item);
+                    
+                    item.addEventListener('click', (e) => {
+                        if (e.target !== checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                        }
+                    });
+                });
+            } else {
+                document.getElementById('input-sends-group').style.display = 'none';
+            }
+            
+            // Create zone sends selector (exclude current zone)
+            const zoneSendsContainer = document.getElementById('zone-sends-select');
+            zoneSendsContainer.innerHTML = '';
+            
+            const availableZones = config.zones.filter(z => z !== currentZone);
+            if (availableZones.length > 0) {
+                availableZones.forEach(zone => {
+                    const item = document.createElement('div');
+                    item.className = 'ha-checkbox-item';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'ha-checkbox';
+                    checkbox.id = `zone-send-${zone}`;
+                    
+                    const label = document.createElement('span');
+                    label.className = 'ha-checkbox-label';
+                    label.textContent = `Zone ${zone}`;
+                    
+                    item.appendChild(checkbox);
+                    item.appendChild(label);
+                    zoneSendsContainer.appendChild(item);
+                    
+                    item.addEventListener('click', (e) => {
+                        if (e.target !== checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                        }
+                    });
+                });
+                document.getElementById('zone-sends-group').style.display = 'block';
+            } else {
+                document.getElementById('zone-sends-group').style.display = 'none';
+            }
+        }
+
+        function nextZoneStep() {
+            // Save current zone's crosspoint selections
+            const currentZone = config.zones[config.currentZoneIndex];
+            
+            // Get selected input sends
+            const selectedInputSends = [];
+            config.inputs.forEach(input => {
+                const checkbox = document.getElementById(`input-send-${input}`);
+                if (checkbox && checkbox.checked) {
+                    selectedInputSends.push(input);
+                }
+            });
+            
+            // Get selected zone sends
+            const selectedZoneSends = [];
+            config.zones.filter(z => z !== currentZone).forEach(zone => {
+                const checkbox = document.getElementById(`zone-send-${zone}`);
+                if (checkbox && checkbox.checked) {
+                    selectedZoneSends.push(zone);
+                }
+            });
+            
+            // Store selections
+            if (selectedInputSends.length > 0) {
+                config.inputToZoneSends[currentZone] = selectedInputSends;
+            }
+            if (selectedZoneSends.length > 0) {
+                config.zoneToZoneSends[currentZone] = selectedZoneSends;
+            }
+            
+            // Move to next zone or finish
+            config.currentZoneIndex++;
+            if (config.currentZoneIndex >= config.zones.length) {
+                nextStep('summary');
+                generateSummary();
+            } else {
+                setupZoneCrosspointStep();
+            }
+        }
+
+        function prevZoneStep() {
+            if (config.currentZoneIndex > 0) {
+                config.currentZoneIndex--;
+                setupZoneCrosspointStep();
+            } else {
+                prevStep('crosspoints');
+            }
+        }
+
+        function generateSummary() {
+            // Generate entity summary
+            const entitySummary = document.getElementById('entity-summary');
+            let entityCount = 0;
+            let entityText = '<div class="ha-summary-title">Main Entities</div>';
+            
+            if (config.inputs.length > 0) {
+                entityCount += config.inputs.length * 3; // media_player, number, switch
+                entityText += `<div class="ha-summary-item">• ${config.inputs.length} Inputs (${config.inputs.length * 3} entities)</div>`;
+            }
+            
+            if (config.zones.length > 0) {
+                entityCount += config.zones.length * 3;
+                entityText += `<div class="ha-summary-item">• ${config.zones.length} Zones (${config.zones.length * 3} entities)</div>`;
+            }
+            
+            if (config.controlGroups.length > 0) {
+                entityCount += config.controlGroups.length * 3;
+                entityText += `<div class="ha-summary-item">• ${config.controlGroups.length} Control Groups (${config.controlGroups.length * 3} entities)</div>`;
+            }
+            
+            if (config.rooms.length > 0) {
+                entityCount += config.rooms.length * 3;
+                entityText += `<div class="ha-summary-item">• ${config.rooms.length} Rooms (${config.rooms.length * 3} entities)</div>`;
+            }
+            
+            entityText += `<div class="ha-summary-item"><strong>Total: ${entityCount} main entities</strong></div>`;
+            entitySummary.innerHTML = entityText;
+            
+            // Generate crosspoint summary
+            const crosspointSummary = document.getElementById('crosspoint-summary');
+            let crosspointCount = 0;
+            let crosspointText = '<div class="ha-summary-title">Crosspoint Entities</div>';
+            
+            // Count input-to-zone sends
+            let inputToZoneCount = 0;
+            Object.entries(config.inputToZoneSends).forEach(([zone, inputs]) => {
+                inputToZoneCount += inputs.length;
+                crosspointText += `<div class="ha-summary-item">• Zone ${zone}: ${inputs.length} input sends (${inputs.map(i => `Input ${i}`).join(', ')})</div>`;
+            });
+            
+            // Count zone-to-zone sends
+            let zoneToZoneCount = 0;
+            Object.entries(config.zoneToZoneSends).forEach(([destZone, sourceZones]) => {
+                zoneToZoneCount += sourceZones.length;
+                crosspointText += `<div class="ha-summary-item">• Zone ${destZone}: ${sourceZones.length} zone sends (${sourceZones.map(z => `Zone ${z}`).join(', ')})</div>`;
+            });
+            
+            crosspointCount = (inputToZoneCount + zoneToZoneCount) * 2; // level + mute for each
+            
+            if (crosspointCount > 0) {
+                crosspointText += `<div class="ha-summary-item"><strong>Total: ${crosspointCount} crosspoint entities</strong></div>`;
+                crosspointText += `<div class="ha-summary-item">(${inputToZoneCount} input-to-zone + ${zoneToZoneCount} zone-to-zone sends, each with level and mute controls)</div>`;
+            } else {
+                crosspointText += '<div class="ha-summary-item">No crosspoint entities configured</div>';
+            }
+            
+            crosspointSummary.innerHTML = crosspointText;
+        }
+
+        function finishSetup() {
+            alert(`Configuration complete!\n\nTotal entities that would be created:\n• ${Object.keys(config).length} configuration parameters\n• Main entities: ${(config.inputs.length + config.zones.length + config.controlGroups.length + config.rooms.length) * 3}\n• Crosspoint entities: ${(Object.values(config.inputToZoneSends).flat().length + Object.values(config.zoneToZoneSends).flat().length) * 2}\n\nThis demo simulates the Home Assistant configuration flow.`);
+        }
+
+        // Initialize the demo when page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
