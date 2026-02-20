@@ -15,7 +15,6 @@ from .coordinator import AhmCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
-    Platform.MEDIA_PLAYER,
     Platform.NUMBER,
     Platform.SWITCH,
 ]

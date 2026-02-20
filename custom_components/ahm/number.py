@@ -18,8 +18,8 @@ from .const import (
     CONF_ROOMS,
     CONF_INPUT_TO_ZONE_SENDS,
     CONF_ZONE_TO_ZONE_SENDS,
-    MIN_DB,
-    MAX_DB,
+    MIDI_LEVEL_MIN,
+    MIDI_LEVEL_MAX,
 )
 from .coordinator import AhmCoordinator
 
@@ -94,10 +94,10 @@ class AhmBaseLevelNumber(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self._number = number
         self._entity_type = entity_type
-        self._attr_native_min_value = MIN_DB
-        self._attr_native_max_value = MAX_DB
-        self._attr_native_step = 0.5
-        self._attr_native_unit_of_measurement = "dB"
+        self._attr_native_min_value = MIDI_LEVEL_MIN
+        self._attr_native_max_value = MIDI_LEVEL_MAX
+        self._attr_native_step = 1
+        self._attr_native_unit_of_measurement = None
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -105,25 +105,24 @@ class AhmBaseLevelNumber(CoordinatorEntity, NumberEntity):
         return self.coordinator.device_info
 
     @property
-    def native_value(self) -> float | None:
-        """Return the current value."""
+    def native_value(self) -> int | None:
+        """Return the current value (raw MIDI 0-127)."""
         data = self._get_data()
-        if data and data.get("level") is not None:
-            level = data["level"]
-            return level if level != float("-inf") else MIN_DB
+        if data is not None:
+            return data.get("level")
         return None
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get entity data from coordinator."""
         raise NotImplementedError
 
-    async def _async_set_level(self, level: float) -> bool:
-        """Set level in dB."""
+    async def _async_set_level(self, level: int) -> bool:
+        """Set level (raw MIDI 0-127)."""
         raise NotImplementedError
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the level."""
-        await self._async_set_level(value)
+        await self._async_set_level(int(value))
 
 
 class AhmInputLevelNumber(AhmBaseLevelNumber):
@@ -142,8 +141,8 @@ class AhmInputLevelNumber(AhmBaseLevelNumber):
             return self.coordinator.data["inputs"].get(self._number)
         return None
 
-    async def _async_set_level(self, level: float) -> bool:
-        """Set input level in dB."""
+    async def _async_set_level(self, level: int) -> bool:
+        """Set input level (raw MIDI 0-127)."""
         return await self.coordinator.async_set_input_level(self._number, level)
 
 
@@ -163,8 +162,8 @@ class AhmZoneLevelNumber(AhmBaseLevelNumber):
             return self.coordinator.data["zones"].get(self._number)
         return None
 
-    async def _async_set_level(self, level: float) -> bool:
-        """Set zone level in dB."""
+    async def _async_set_level(self, level: int) -> bool:
+        """Set zone level (raw MIDI 0-127)."""
         return await self.coordinator.async_set_zone_level(self._number, level)
 
 
@@ -184,8 +183,8 @@ class AhmControlGroupLevelNumber(AhmBaseLevelNumber):
             return self.coordinator.data["control_groups"].get(self._number)
         return None
 
-    async def _async_set_level(self, level: float) -> bool:
-        """Set control group level in dB."""
+    async def _async_set_level(self, level: int) -> bool:
+        """Set control group level (raw MIDI 0-127)."""
         return await self.coordinator.async_set_control_group_level(self._number, level)
 
 
@@ -205,8 +204,8 @@ class AhmRoomLevelNumber(AhmBaseLevelNumber):
             return self.coordinator.data["rooms"].get(self._number)
         return None
 
-    async def _async_set_level(self, level: float) -> bool:
-        """Set room level in dB."""
+    async def _async_set_level(self, level: int) -> bool:
+        """Set room level (raw MIDI 0-127)."""
         return await self.coordinator.async_set_room_level(self._number, level)
 
 
@@ -231,10 +230,10 @@ class AhmCrosspointLevelNumber(CoordinatorEntity, NumberEntity):
         source_type = "Zone" if is_zone_to_zone else "Input"
         self._attr_name = f"{source_type} {source_num} to Zone {dest_zone} Send Level"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{crosspoint_id}_level"
-        self._attr_native_min_value = MIN_DB
-        self._attr_native_max_value = MAX_DB
-        self._attr_native_step = 0.5
-        self._attr_native_unit_of_measurement = "dB"
+        self._attr_native_min_value = MIDI_LEVEL_MIN
+        self._attr_native_max_value = MIDI_LEVEL_MAX
+        self._attr_native_step = 1
+        self._attr_native_unit_of_measurement = None
         self._attr_mode = "box"
 
     @property
@@ -243,18 +242,17 @@ class AhmCrosspointLevelNumber(CoordinatorEntity, NumberEntity):
         return self.coordinator.device_info
 
     @property
-    def native_value(self) -> float | None:
-        """Return the current send level."""
+    def native_value(self) -> int | None:
+        """Return the current send level (raw MIDI 0-127)."""
         if not self.coordinator.data:
             return None
         crosspoint_data = self.coordinator.data.get("crosspoints", {}).get(self._crosspoint_id)
         if crosspoint_data is None:
             return None
-        level = crosspoint_data.get("level")
-        return level if level != float("-inf") else MIN_DB
+        return crosspoint_data.get("level")
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the send level."""
         await self.coordinator.async_set_send_level(
-            self._source_num, self._dest_zone, value, self._is_zone_to_zone
+            self._source_num, self._dest_zone, int(value), self._is_zone_to_zone
         )

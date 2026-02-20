@@ -20,7 +20,9 @@ CONF_INPUT_TO_ZONE_SENDS = "input_to_zone_sends"
 CONF_ZONE_TO_ZONE_SENDS = "zone_to_zone_sends"
 
 # Update intervals
-UPDATE_INTERVAL = 5  # seconds
+# Push updates from the AHM are the primary mechanism; polling is a slow
+# fallback to catch any missed packets.
+UPDATE_INTERVAL = 60  # seconds
 
 # Device limits
 MAX_INPUTS = 64
@@ -49,7 +51,6 @@ ENTITY_TYPE_ZONE_TO_ZONE_SEND = "zone_to_zone_send"
 CROSSPOINT_TYPE_INPUT_TO_ZONE = "input_to_zone"
 CROSSPOINT_TYPE_ZONE_TO_ZONE = "zone_to_zone"
 
-# Level conversion constants
-MIN_DB = -48
-MAX_DB = 10
-DB_RANGE = MAX_DB - MIN_DB
+# Raw MIDI level range (0-127 as used by the AHM protocol)
+MIDI_LEVEL_MIN = 0
+MIDI_LEVEL_MAX = 127

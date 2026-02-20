@@ -411,28 +411,25 @@ class AhmClient:
             _LOGGER.error("Failed to set input %d mute: %s", number, err)
             return False
 
-    async def get_input_level(self, number: int) -> Optional[float]:
-        """Get input level in dB."""
+    async def get_input_level(self, number: int) -> Optional[int]:
+        """Get input level as raw MIDI value (0-127)."""
         try:
             ch = f"{min(max(0, number - 1), 63):02x}"
             message = f"00010B17{ch}F7"
             result = await self.send_sysex(message)
-            
+
             if result and len(result) >= 7:
-                midi_val = result[6]
-                return self._midi_to_db(midi_val)
+                return result[6]
             return None
-            
+
         except Exception as err:
             _LOGGER.error("Failed to get input %d level: %s", number, err)
             return None
 
-    async def set_input_level(self, number: int, level: float) -> bool:
-        """Set input level in dB."""
+    async def set_input_level(self, number: int, level: int) -> bool:
+        """Set input level as raw MIDI value (0-127)."""
         try:
-            level = min(10.0, max(-48.0, level))
-            level_midi = self._db_to_midi(level)
-            level_hex = f"{level_midi:02x}"
+            level_hex = f"{max(0, min(127, int(level))):02x}"
             ch = f"{min(max(0, number - 1), 63):02x}"
             # NRPN: BN 63 CH  BN 62 17  BN 06 LV  (9 bytes, per spec)
             message = bytearray.fromhex(f"B063{ch}B06217B006{level_hex}")
@@ -473,28 +470,25 @@ class AhmClient:
             _LOGGER.error("Failed to set zone %d mute: %s", number, err)
             return False
 
-    async def get_zone_level(self, number: int) -> Optional[float]:
-        """Get zone level in dB."""
+    async def get_zone_level(self, number: int) -> Optional[int]:
+        """Get zone level as raw MIDI value (0-127)."""
         try:
             ch = f"{min(max(0, number - 1), 63):02x}"
             message = f"01010B17{ch}F7"
             result = await self.send_sysex(message)
-            
+
             if result and len(result) >= 7:
-                midi_val = result[6]
-                return self._midi_to_db(midi_val)
+                return result[6]
             return None
-            
+
         except Exception as err:
             _LOGGER.error("Failed to get zone %d level: %s", number, err)
             return None
 
-    async def set_zone_level(self, number: int, level: float) -> bool:
-        """Set zone level in dB."""
+    async def set_zone_level(self, number: int, level: int) -> bool:
+        """Set zone level as raw MIDI value (0-127)."""
         try:
-            level = min(10.0, max(-48.0, level))
-            level_midi = self._db_to_midi(level)
-            level_hex = f"{level_midi:02x}"
+            level_hex = f"{max(0, min(127, int(level))):02x}"
             ch = f"{min(max(0, number - 1), 63):02x}"
             # NRPN: BN 63 CH  BN 62 17  BN 06 LV  (9 bytes, per spec)
             message = bytearray.fromhex(f"B163{ch}B16217B106{level_hex}")
@@ -535,28 +529,25 @@ class AhmClient:
             _LOGGER.error("Failed to set control group %d mute: %s", number, err)
             return False
 
-    async def get_control_group_level(self, number: int) -> Optional[float]:
-        """Get control group level in dB."""
+    async def get_control_group_level(self, number: int) -> Optional[int]:
+        """Get control group level as raw MIDI value (0-127)."""
         try:
             ch = f"{min(max(0, number - 1), 31):02x}"
             message = f"02010B17{ch}F7"
             result = await self.send_sysex(message)
-            
+
             if result and len(result) >= 7:
-                midi_val = result[6]
-                return self._midi_to_db(midi_val)
+                return result[6]
             return None
-            
+
         except Exception as err:
             _LOGGER.error("Failed to get control group %d level: %s", number, err)
             return None
 
-    async def set_control_group_level(self, number: int, level: float) -> bool:
-        """Set control group level in dB."""
+    async def set_control_group_level(self, number: int, level: int) -> bool:
+        """Set control group level as raw MIDI value (0-127)."""
         try:
-            level = min(10.0, max(-48.0, level))
-            level_midi = self._db_to_midi(level)
-            level_hex = f"{level_midi:02x}"
+            level_hex = f"{max(0, min(127, int(level))):02x}"
             ch = f"{min(max(0, number - 1), 31):02x}"
             # NRPN: BN 63 CH  BN 62 17  BN 06 LV  (9 bytes, per spec)
             message = bytearray.fromhex(f"B263{ch}B26217B206{level_hex}")
@@ -597,28 +588,25 @@ class AhmClient:
             _LOGGER.error("Failed to set room %d mute: %s", number, err)
             return False
 
-    async def get_room_level(self, number: int) -> Optional[float]:
-        """Get room level in dB."""
+    async def get_room_level(self, number: int) -> Optional[int]:
+        """Get room level as raw MIDI value (0-127)."""
         try:
             ch = f"{min(max(0, number - 1), 15):02x}"
             message = f"03010B17{ch}F7"
             result = await self.send_sysex(message)
-            
+
             if result and len(result) >= 7:
-                midi_val = result[6]
-                return self._midi_to_db(midi_val)
+                return result[6]
             return None
-            
+
         except Exception as err:
             _LOGGER.error("Failed to get room %d level: %s", number, err)
             return None
 
-    async def set_room_level(self, number: int, level: float) -> bool:
-        """Set room level in dB."""
+    async def set_room_level(self, number: int, level: int) -> bool:
+        """Set room level as raw MIDI value (0-127)."""
         try:
-            level = min(10.0, max(-48.0, level))
-            level_midi = self._db_to_midi(level)
-            level_hex = f"{level_midi:02x}"
+            level_hex = f"{max(0, min(127, int(level))):02x}"
             ch = f"{min(max(0, number - 1), 15):02x}"
             # NRPN: BN 63 CH  BN 62 17  BN 06 LV  (9 bytes, per spec)
             message = bytearray.fromhex(f"B363{ch}B36217B306{level_hex}")
@@ -639,8 +627,8 @@ class AhmClient:
             return False
 
     # Send controls (crosspoints)
-    async def get_send_level(self, source_type: str, source_num: int, dest_zone: int) -> Optional[float]:
-        """Get send level from source to destination zone."""
+    async def get_send_level(self, source_type: str, source_num: int, dest_zone: int) -> Optional[int]:
+        """Get send level from source to destination zone as raw MIDI value (0-127)."""
         try:
             # Map source type to MIDI channel and source number
             if source_type == "input":
@@ -660,20 +648,17 @@ class AhmClient:
             result = await self.send_sysex(message)
             
             if result and len(result) >= 7:
-                midi_val = result[6]
-                return self._midi_to_db(midi_val)
+                return result[6]
             return None
-            
+
         except Exception as err:
             _LOGGER.error("Failed to get send level %s %d->zone %d: %s", source_type, source_num, dest_zone, err)
             return None
 
-    async def set_send_level(self, source_type: str, source_num: int, dest_zone: int, level: float) -> bool:
-        """Set send level from source to destination zone."""
+    async def set_send_level(self, source_type: str, source_num: int, dest_zone: int, level: int) -> bool:
+        """Set send level from source to destination zone as raw MIDI value (0-127)."""
         try:
-            level = min(10.0, max(-48.0, level))
-            level_midi = self._db_to_midi(level)
-            level_hex = f"{level_midi:02x}"
+            level_hex = f"{max(0, min(127, int(level))):02x}"
             
             # Map source type to MIDI channel and source number
             if source_type == "input":

@@ -268,60 +268,79 @@ class AhmCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Failed to get zone %d to zone %d send data: %s", source_zone, dest_zone, err)
             return None
 
+    def _optimistic_update(
+        self, data_key: str, entity_num: int | str, field: str, value: Any
+    ) -> None:
+        """Immediately reflect a confirmed write in the coordinator's local data.
+
+        This avoids a full poll after every set command.  The AHM will also
+        send an unsolicited update confirming the change, which will be a
+        harmless no-op because the value already matches.
+        """
+        if not self.data:
+            return
+        section = self.data.get(data_key)
+        if not section or entity_num not in section:
+            return
+        updated_data = {**self.data}
+        updated_data[data_key] = {**section}
+        updated_data[data_key][entity_num] = {**section[entity_num], field: value}
+        self.async_set_updated_data(updated_data)
+
     async def async_set_input_mute(self, input_num: int, muted: bool) -> bool:
         """Set input mute status."""
         result = await self.client.set_input_mute(input_num, muted)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("inputs", input_num, "muted", muted)
         return result
 
-    async def async_set_input_level(self, input_num: int, level: float) -> bool:
-        """Set input level."""
+    async def async_set_input_level(self, input_num: int, level: int) -> bool:
+        """Set input level (raw MIDI 0-127)."""
         result = await self.client.set_input_level(input_num, level)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("inputs", input_num, "level", level)
         return result
 
     async def async_set_zone_mute(self, zone_num: int, muted: bool) -> bool:
         """Set zone mute status."""
         result = await self.client.set_zone_mute(zone_num, muted)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("zones", zone_num, "muted", muted)
         return result
 
-    async def async_set_zone_level(self, zone_num: int, level: float) -> bool:
-        """Set zone level."""
+    async def async_set_zone_level(self, zone_num: int, level: int) -> bool:
+        """Set zone level (raw MIDI 0-127)."""
         result = await self.client.set_zone_level(zone_num, level)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("zones", zone_num, "level", level)
         return result
 
     async def async_set_control_group_mute(self, cg_num: int, muted: bool) -> bool:
         """Set control group mute status."""
         result = await self.client.set_control_group_mute(cg_num, muted)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("control_groups", cg_num, "muted", muted)
         return result
 
-    async def async_set_control_group_level(self, cg_num: int, level: float) -> bool:
-        """Set control group level."""
+    async def async_set_control_group_level(self, cg_num: int, level: int) -> bool:
+        """Set control group level (raw MIDI 0-127)."""
         result = await self.client.set_control_group_level(cg_num, level)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("control_groups", cg_num, "level", level)
         return result
 
     async def async_set_room_mute(self, room_num: int, muted: bool) -> bool:
         """Set room mute status."""
         result = await self.client.set_room_mute(room_num, muted)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("rooms", room_num, "muted", muted)
         return result
 
-    async def async_set_room_level(self, room_num: int, level: float) -> bool:
-        """Set room level."""
+    async def async_set_room_level(self, room_num: int, level: int) -> bool:
+        """Set room level (raw MIDI 0-127)."""
         result = await self.client.set_room_level(room_num, level)
         if result:
-            await self.async_request_refresh()
+            self._optimistic_update("rooms", room_num, "level", level)
         return result
 
     async def async_recall_preset(self, preset_num: int) -> bool:
@@ -405,13 +424,12 @@ class AhmCoordinator(DataUpdateCoordinator):
                     if state and state[0] is not None and state[1] == 0x17:
                         # Complete level NRPN for channel type N, channel state[0]
                         ch_num = state[0] + 1  # 0-indexed → 1-indexed
-                        level_db = self.client._midi_to_db(val)
                         data_key = _CH_MAP.get(n)
                         if data_key and data_key in data and ch_num in data[data_key]:
-                            data[data_key][ch_num]["level"] = level_db
+                            data[data_key][ch_num]["level"] = val
                             _LOGGER.debug(
-                                "Unsolicited level: %s %d → %.1f dB",
-                                data_key, ch_num, level_db,
+                                "Unsolicited level: %s %d → %d",
+                                data_key, ch_num, val,
                             )
                             updated = True
                     nrpn_state.pop(n, None)  # Reset state after value byte.
@@ -419,19 +437,22 @@ class AhmCoordinator(DataUpdateCoordinator):
 
         return updated
 
-    # Crosspoint control methods
     async def async_set_send_mute(self, source_num: int, dest_zone: int, muted: bool, is_zone_to_zone: bool = False) -> bool:
         """Set send mute status."""
         source_type = "zone" if is_zone_to_zone else "input"
         result = await self.client.set_send_mute(source_type, source_num, dest_zone, muted)
         if result:
-            await self.async_request_refresh()
+            src_prefix = "zone" if is_zone_to_zone else "input"
+            crosspoint_id = f"{src_prefix}_{source_num}_to_zone_{dest_zone}"
+            self._optimistic_update("crosspoints", crosspoint_id, "muted", muted)
         return result
 
-    async def async_set_send_level(self, source_num: int, dest_zone: int, level: float, is_zone_to_zone: bool = False) -> bool:
-        """Set send level."""
+    async def async_set_send_level(self, source_num: int, dest_zone: int, level: int, is_zone_to_zone: bool = False) -> bool:
+        """Set send level (raw MIDI 0-127)."""
         source_type = "zone" if is_zone_to_zone else "input"
         result = await self.client.set_send_level(source_type, source_num, dest_zone, level)
         if result:
-            await self.async_request_refresh()
+            src_prefix = "zone" if is_zone_to_zone else "input"
+            crosspoint_id = f"{src_prefix}_{source_num}_to_zone_{dest_zone}"
+            self._optimistic_update("crosspoints", crosspoint_id, "level", level)
         return result
