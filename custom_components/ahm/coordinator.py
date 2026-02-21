@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .ahm_client import AhmClient
@@ -47,6 +48,12 @@ class AhmCoordinator(DataUpdateCoordinator):
         # split across two 0.5s drain windows is never silently dropped.
         # Structure: {midi_channel_n: (nrpn_msb, nrpn_lsb)}
         self._nrpn_state: dict[int, tuple[int | None, int | None]] = {}
+        # Channel names fetched from the AHM, persisted to .storage so they
+        # survive integration reloads and HA restarts.
+        self._names_store: Store = Store(hass, 1, f"ahm_channel_names_{entry.entry_id}")
+        # Flag set by _apply_unsolicited_updates when a name response arrives;
+        # cleared by the push listener loop after saving to storage.
+        self._names_dirty: bool = False
 
         super().__init__(
             hass,
@@ -86,6 +93,9 @@ class AhmCoordinator(DataUpdateCoordinator):
                     updated_data = {**self.data, "crosspoints": dict(self.data.get("crosspoints") or {})}
                     if self._apply_unsolicited_updates(messages, updated_data):
                         self.async_set_updated_data(updated_data)
+                        if self._names_dirty:
+                            self._names_dirty = False
+                            await self._async_save_names()
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # pylint: disable=broad-except
@@ -199,6 +209,10 @@ class AhmCoordinator(DataUpdateCoordinator):
         if messages:
             self._apply_unsolicited_updates(messages, data)
 
+        # Restore any previously fetched channel names so entity names are
+        # correct from the moment HA starts, without needing to press the button.
+        await self._apply_stored_names(data)
+
         return data
 
     async def _request_all_channel_states(self) -> None:
@@ -231,6 +245,44 @@ class AhmCoordinator(DataUpdateCoordinator):
             await self.client.request_channel_name(1, int(num))
         for num in cfg.get(CONF_CONTROL_GROUPS, []):
             await self.client.request_channel_name(2, int(num))
+
+    async def _apply_stored_names(self, data: dict[str, Any]) -> None:
+        """Load persisted channel names from storage and apply to *data*.
+
+        Called once at the end of ``_initial_load`` so that entity names are
+        restored immediately on startup without needing to press the button again.
+        Channel numbers are stored as strings in JSON, so they are converted
+        back to int when applied.
+        """
+        stored: dict = await self._names_store.async_load() or {}
+        for entity_type, names in stored.items():
+            if entity_type not in data:
+                continue
+            for ch_num_str, name in names.items():
+                ch_num = int(ch_num_str)
+                if ch_num in data[entity_type] and name:
+                    data[entity_type][ch_num]["name"] = name
+
+    async def _async_save_names(self) -> None:
+        """Persist the current set of fetched channel names to storage.
+
+        Extracts only the non-null names from ``self.data`` and writes them as
+        a nested dict: ``{entity_type: {ch_num: name}}``.  Called by the push
+        listener after processing a name response from the AHM.
+        """
+        if not self.data:
+            return
+        names: dict[str, dict[str, str]] = {}
+        for entity_type in ("inputs", "zones", "control_groups"):
+            type_names = {
+                str(ch_num): ch_data["name"]
+                for ch_num, ch_data in self.data.get(entity_type, {}).items()
+                if ch_data.get("name")
+            }
+            if type_names:
+                names[entity_type] = type_names
+        await self._names_store.async_save(names)
+        _LOGGER.debug("Saved channel names to storage: %s", names)
 
     async def _collect_crosspoint_data(self, existing: dict[str, Any]) -> dict[str, Any]:
         """Query all configured crosspoints and return a fresh crosspoints dict.
@@ -456,6 +508,7 @@ class AhmCoordinator(DataUpdateCoordinator):
                         data_key, ch_num, name,
                     )
                     updated = True
+                    self._names_dirty = True
                 continue
 
             status = msg[0]

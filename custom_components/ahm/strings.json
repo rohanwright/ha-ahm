@@ -20,8 +20,8 @@
         }
       },
       "zone_crosspoints": {
-        "title": "Zone {zone_number} Send Configuration {progress}",
-        "description": "Select which inputs and zones should have send controls to Zone {zone_number}.\n\nAvailable: {input_count} inputs, {zone_count} zones\n\nFor each selection, both level and mute controls will be created.",
+        "title": "{zone_label} Send Configuration {progress}",
+        "description": "Select which inputs and zones should have send controls to {zone_label}.\n\nAvailable: {input_count} inputs, {zone_count} zones\n\nFor each selection, both level and mute controls will be created.",
         "data": {
           "input_sends": "Input-to-Zone Sends",
           "zone_sends": "Zone-to-Zone Sends"
@@ -48,8 +48,8 @@
         }
       },
       "zone_crosspoints": {
-        "title": "Zone {zone_number} Send Configuration {progress}",
-        "description": "Select which inputs and zones should have send controls to Zone {zone_number}.\n\nAvailable: {input_count} inputs, {zone_count} zones\n\nFor each selection, both level and mute controls will be created.",
+        "title": "{zone_label} Send Configuration {progress}",
+        "description": "Select which inputs and zones should have send controls to {zone_label}.\n\nAvailable: {input_count} inputs, {zone_count} zones\n\nFor each selection, both level and mute controls will be created.",
         "data": {
           "input_sends": "Input-to-Zone Sends",
           "zone_sends": "Zone-to-Zone Sends"

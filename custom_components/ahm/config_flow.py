@@ -1,6 +1,7 @@
 """Config flow for AHM integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -9,6 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.storage import Store
 
 from .ahm_client import AhmClient
 from .const import (
@@ -28,6 +30,49 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Maps device-type byte → entity_type key (mirrors AhmCoordinator._CH_MAP).
+_CH_NAME_MAP: dict[int, str] = {0: "inputs", 1: "zones", 2: "control_groups"}
+
+
+def _channel_label(names: dict, entity_type: str, number: int, prefix: str) -> str:
+    """Return 'Prefix N - Name' if a fetched name exists, otherwise 'Prefix N'."""
+    name = names.get(entity_type, {}).get(number)
+    return f"{prefix} {number} - {name}" if name else f"{prefix} {number}"
+
+
+async def _fetch_channel_names(
+    client: AhmClient, limits: dict
+) -> dict[str, dict[int, str]]:
+    """Send name GET requests to the AHM and return responses that arrive within 1 s.
+
+    Fires a SysEx GET (cmd 0x09) for every input, zone, and control group
+    within the model limits then waits 1 second for the device to reply.
+    Name responses (cmd 0x0A) are parsed from the rx queue.
+
+    Returns ``{entity_type: {1_indexed_ch_num: name_str}}``.
+    """
+    for n in range(limits["inputs"]):
+        await client.request_channel_name(0, n + 1)
+    for n in range(limits["zones"]):
+        await client.request_channel_name(1, n + 1)
+    for n in range(limits["control_groups"]):
+        await client.request_channel_name(2, n + 1)
+
+    await asyncio.sleep(1.0)
+
+    names: dict[str, dict[int, str]] = {}
+    for msg in client.drain_queue():
+        if msg[0] == 0xF0 and len(msg) >= 12 and msg[9] == 0x0A:
+            data_key = _CH_NAME_MAP.get(msg[8])
+            ch_num = msg[10] + 1  # wire is 0-indexed; store as 1-indexed
+            try:
+                name = bytes(msg[11:-1]).decode("ascii").strip()
+            except (UnicodeDecodeError, ValueError):
+                name = ""
+            if data_key and name:
+                names.setdefault(data_key, {})[ch_num] = name
+    return names
+
 
 class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for AHM."""
@@ -40,6 +85,9 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Zone iteration state — kept on self so it never ends up in entry.data.
         self._selected_zones: list[int] = []
         self._current_zone_index: int = 0
+        # Channel names fetched from the AHM during the connection step.
+        # Used to label multi-select options as "Input 1 - Spotify" etc.
+        self._channel_names: dict[str, dict[int, str]] = {}
 
     @staticmethod
     def async_get_options_flow(
@@ -61,12 +109,14 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 connected = await client.async_connect()
                 if connected:
-                    result = await client.test_connection()
+                    # Fetch channel names while we still have the connection open.
+                    # Names are used to label the entity-selection multi-selects.
+                    self._channel_names = await _fetch_channel_names(
+                        client, MODEL_LIMITS[user_input[CONF_MODEL]]
+                    )
                     await client.async_disconnect()
-                else:
-                    result = False
 
-                if result:
+                if connected:
                     self.data.update(user_input)
                     return await self.async_step_entities()
                 else:
@@ -111,15 +161,19 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Build entity selection schema using the chosen model's limits.
         limits = MODEL_LIMITS[self.data[CONF_MODEL]]
+        n = self._channel_names
         data_schema = vol.Schema({
             vol.Optional(CONF_INPUTS, default=["1"]): cv.multi_select({
-                str(i): f"Input {i}" for i in range(1, limits["inputs"] + 1)
+                str(i): _channel_label(n, "inputs", i, "Input")
+                for i in range(1, limits["inputs"] + 1)
             }),
             vol.Optional(CONF_ZONES, default=["1"]): cv.multi_select({
-                str(i): f"Zone {i}" for i in range(1, limits["zones"] + 1)
+                str(i): _channel_label(n, "zones", i, "Zone")
+                for i in range(1, limits["zones"] + 1)
             }),
             vol.Optional(CONF_CONTROL_GROUPS, default=[]): cv.multi_select({
-                str(i): f"Control Group {i}" for i in range(1, limits["control_groups"] + 1)
+                str(i): _channel_label(n, "control_groups", i, "Control Group")
+                for i in range(1, limits["control_groups"] + 1)
             }),
         })
 
@@ -171,14 +225,15 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         selected_inputs = self.data.get(CONF_INPUTS, [])
         available_zones = [z for z in self._selected_zones if z != current_zone]
 
+        n = self._channel_names
         schema_dict: dict = {}
         if selected_inputs:
             schema_dict[vol.Optional("input_sends", default=[])] = cv.multi_select(
-                {str(i): f"Input {i}" for i in selected_inputs}
+                {str(i): _channel_label(n, "inputs", int(i), "Input") for i in selected_inputs}
             )
         if available_zones:
             schema_dict[vol.Optional("zone_sends", default=[])] = cv.multi_select(
-                {str(z): f"Zone {z}" for z in available_zones}
+                {str(z): _channel_label(n, "zones", z, "Zone") for z in available_zones}
             )
 
         if not schema_dict:
@@ -192,6 +247,7 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="zone_crosspoints",
             data_schema=vol.Schema(schema_dict),
             description_placeholders={
+                "zone_label": _channel_label(n, "zones", current_zone, "Zone"),
                 "zone_number": str(current_zone),
                 "progress": progress,
                 "input_count": str(len(selected_inputs)),
@@ -215,6 +271,8 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
         self._options: dict[str, Any] = {}
         self._selected_zones: list[int] = []
         self._current_zone_index: int = 0
+        # Channel names loaded from storage for friendly multi-select labels.
+        self._channel_names: dict[str, dict[int, str]] = {}
 
     @property
     def _current_config(self) -> dict[str, Any]:
@@ -240,15 +298,26 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
 
         # Restrict choices to the model's limits (model is always in entry.data).
         limits = MODEL_LIMITS.get(cfg.get(CONF_MODEL, DEFAULT_MODEL), MODEL_LIMITS[DEFAULT_MODEL])
+
+        # Load previously fetched channel names from storage for friendly labels.
+        stored = await Store(
+            self.hass, 1, f"ahm_channel_names_{self._entry.entry_id}"
+        ).async_load() or {}
+        self._channel_names = {
+            entity_type: {int(k): v for k, v in ch_names.items()}
+            for entity_type, ch_names in stored.items()
+        }
+
+        n = self._channel_names
         data_schema = vol.Schema({
             vol.Optional(CONF_INPUTS, default=cfg.get(CONF_INPUTS, ["1"])): cv.multi_select(
-                {str(i): f"Input {i}" for i in range(1, limits["inputs"] + 1)}
+                {str(i): _channel_label(n, "inputs", i, "Input") for i in range(1, limits["inputs"] + 1)}
             ),
             vol.Optional(CONF_ZONES, default=cfg.get(CONF_ZONES, ["1"])): cv.multi_select(
-                {str(i): f"Zone {i}" for i in range(1, limits["zones"] + 1)}
+                {str(i): _channel_label(n, "zones", i, "Zone") for i in range(1, limits["zones"] + 1)}
             ),
             vol.Optional(CONF_CONTROL_GROUPS, default=cfg.get(CONF_CONTROL_GROUPS, [])): cv.multi_select(
-                {str(i): f"Control Group {i}" for i in range(1, limits["control_groups"] + 1)}
+                {str(i): _channel_label(n, "control_groups", i, "Control Group") for i in range(1, limits["control_groups"] + 1)}
             ),
         })
 
@@ -288,14 +357,15 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
         existing_iz = cfg.get(CONF_INPUT_TO_ZONE_SENDS, {}).get(str(current_zone), [])
         existing_zz = cfg.get(CONF_ZONE_TO_ZONE_SENDS, {}).get(str(current_zone), [])
 
+        n = self._channel_names
         schema_dict: dict = {}
         if selected_inputs:
             schema_dict[vol.Optional("input_sends", default=existing_iz)] = cv.multi_select(
-                {str(i): f"Input {i}" for i in selected_inputs}
+                {str(i): _channel_label(n, "inputs", int(i), "Input") for i in selected_inputs}
             )
         if available_zones:
             schema_dict[vol.Optional("zone_sends", default=existing_zz)] = cv.multi_select(
-                {str(z): f"Zone {z}" for z in available_zones}
+                {str(z): _channel_label(n, "zones", z, "Zone") for z in available_zones}
             )
 
         if not schema_dict:
@@ -308,6 +378,7 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
             step_id="zone_crosspoints",
             data_schema=vol.Schema(schema_dict),
             description_placeholders={
+                "zone_label": _channel_label(n, "zones", current_zone, "Zone"),
                 "zone_number": str(current_zone),
                 "progress": progress,
                 "input_count": str(len(selected_inputs)),
