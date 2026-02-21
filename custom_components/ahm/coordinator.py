@@ -57,18 +57,21 @@ class AhmCoordinator(DataUpdateCoordinator):
             self._push_task = asyncio.ensure_future(self._push_listener_loop())
 
     async def _push_listener_loop(self) -> None:
-        """Background task: drain unsolicited AHM messages and apply them immediately.
+        """Background task: drain incoming AHM messages and apply them to HA state.
 
         The AHM sends MIDI push notifications whenever hardware state changes
-        (e.g. someone turns a knob or presses a mute button). This loop wakes
-        every 0.5 s, drains whatever has accumulated in the client's unsolicited
-        buffer, applies the updates to local data, and notifies HA listeners —
-        all without waiting for the 60-second poll.
+        (e.g. someone turns a knob or presses a mute button).  GET query responses
+        for channel entities (Note On / NRPN CC) are byte-for-byte identical to
+        those unsolicited messages, so this loop handles both naturally.
+
+        Wakes every 0.5 s, drains everything in the rx queue, applies any mute or
+        level changes to local data, and notifies HA listeners immediately —
+        without waiting for the 60-second poll.
         """
         while True:
             try:
                 await asyncio.sleep(0.5)
-                messages = self.client.drain_unsolicited()
+                messages = self.client.drain_queue()
                 if messages and self.data:
                     updated_data = {**self.data}
                     if self._apply_unsolicited_updates(messages, updated_data):
@@ -99,126 +102,78 @@ class AhmCoordinator(DataUpdateCoordinator):
         return {**self.entry.data, **self.entry.options}
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from AHM device (slow poll — real-time updates handled by push listener)."""
+        """Fetch / refresh data from the AHM device.
+
+        **First call** (``self.data is None``):
+          Sends GET requests for every configured channel entity, waits 500 ms
+          for the AHM to respond (responses are MIDI Note On / NRPN CC messages,
+          identical in format to unsolicited push messages), drains the queue,
+          applies state to build the initial data dictionary, then queries each
+          crosspoint individually via SysEx.
+
+        **Subsequent calls** (regular 60-second poll):
+          Channel entities are kept current by the push listener in real time, so
+          we skip the channel GET cycle entirely and only refresh crosspoint state
+          (which has no unsolicited push mechanism).
+        """
         try:
-            data = {}
-            cfg = self.config
+            if self.data is None:
+                return await self._initial_load()
 
-            # Get input data
-            if CONF_INPUTS in cfg:
-                data["inputs"] = {}
-                for input_num in cfg[CONF_INPUTS]:
-                    input_num = int(input_num)
-                    input_data = await self._get_input_data(input_num)
-                    if input_data:
-                        data["inputs"][input_num] = input_data
-
-            # Get zone data
-            if CONF_ZONES in cfg:
-                data["zones"] = {}
-                for zone_num in cfg[CONF_ZONES]:
-                    zone_num = int(zone_num)
-                    zone_data = await self._get_zone_data(zone_num)
-                    if zone_data:
-                        data["zones"][zone_num] = zone_data
-
-            # Get control group data
-            if CONF_CONTROL_GROUPS in cfg:
-                data["control_groups"] = {}
-                for cg_num in cfg[CONF_CONTROL_GROUPS]:
-                    cg_num = int(cg_num)
-                    cg_data = await self._get_control_group_data(cg_num)
-                    if cg_data:
-                        data["control_groups"][cg_num] = cg_data
-
-            # Get room data
-            if CONF_ROOMS in cfg:
-                data["rooms"] = {}
-                for room_num in cfg[CONF_ROOMS]:
-                    room_num = int(room_num)
-                    room_data = await self._get_room_data(room_num)
-                    if room_data:
-                        data["rooms"][room_num] = room_data
-
-            # Get crosspoint data
-            await self._collect_crosspoint_data(data)
-
-            return data
+            # Subsequent polls: only crosspoints need explicit querying.
+            updated = {**self.data}
+            await self._collect_crosspoint_data(updated)
+            return updated
 
         except Exception as err:
             raise UpdateFailed(f"Error communicating with AHM device: {err}") from err
 
-    async def _get_input_data(self, input_num: int) -> dict[str, Any] | None:
-        """Get data for a specific input."""
-        try:
-            tasks = [
-                self.client.get_input_muted(input_num),
-                self.client.get_input_level(input_num),
-            ]
-            
-            muted, level = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            return {
-                "muted": muted if not isinstance(muted, Exception) else None,
-                "level": level if not isinstance(level, Exception) else None,
-            }
-        except Exception as err:
-            _LOGGER.debug("Failed to get input %d data: %s", input_num, err)
-            return None
+    async def _initial_load(self) -> dict[str, Any]:
+        """Build the first data dict by sending GETs and waiting for responses."""
+        cfg = self.config
 
-    async def _get_zone_data(self, zone_num: int) -> dict[str, Any] | None:
-        """Get data for a specific zone."""
-        try:
-            tasks = [
-                self.client.get_zone_muted(zone_num),
-                self.client.get_zone_level(zone_num),
-            ]
-            
-            muted, level = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            return {
-                "muted": muted if not isinstance(muted, Exception) else None,
-                "level": level if not isinstance(level, Exception) else None,
-            }
-        except Exception as err:
-            _LOGGER.debug("Failed to get zone %d data: %s", zone_num, err)
-            return None
+        # Initialise empty state containers for every configured entity so that
+        # entities exist even if no GET response arrives within the window.
+        data: dict[str, Any] = {
+            "inputs": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_INPUTS, [])},
+            "zones": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_ZONES, [])},
+            "control_groups": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_CONTROL_GROUPS, [])},
+            "rooms": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_ROOMS, [])},
+            "crosspoints": {},
+        }
 
-    async def _get_control_group_data(self, cg_num: int) -> dict[str, Any] | None:
-        """Get data for a specific control group."""
-        try:
-            tasks = [
-                self.client.get_control_group_muted(cg_num),
-                self.client.get_control_group_level(cg_num),
-            ]
-            
-            muted, level = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            return {
-                "muted": muted if not isinstance(muted, Exception) else None,
-                "level": level if not isinstance(level, Exception) else None,
-            }
-        except Exception as err:
-            _LOGGER.debug("Failed to get control group %d data: %s", cg_num, err)
-            return None
+        # Fire off GET requests for all channel entities (fire-and-forget).
+        await self._request_all_channel_states()
 
-    async def _get_room_data(self, room_num: int) -> dict[str, Any] | None:
-        """Get data for a specific room."""
-        try:
-            tasks = [
-                self.client.get_room_muted(room_num),
-                self.client.get_room_level(room_num),
-            ]
-            
-            muted, level = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            return {
-                "muted": muted if not isinstance(muted, Exception) else None,
-                "level": level if not isinstance(level, Exception) else None,
-            }
-        except Exception as err:
-            _LOGGER.debug("Failed to get room %d data: %s", room_num, err)
-            return None
+        # Give the AHM time to send back responses.  The reader places them in
+        # the queue as normal MIDI messages; we drain and apply them below.
+        await asyncio.sleep(0.5)
+
+        messages = self.client.drain_queue()
+        if messages:
+            self._apply_unsolicited_updates(messages, data)
+
+        # Crosspoints respond with SysEx, not MIDI, so they need explicit polling.
+        await self._collect_crosspoint_data(data)
+
+        return data
+
+    async def _request_all_channel_states(self) -> None:
+        """Fire GET requests for all configured channel entities (inputs/zones/CGs/rooms).
+
+        Each request sends two SysEx GET packets (mute + level) per entity.
+        The AHM responds with identical MIDI to its unsolicited push messages;
+        the push listener (or the initial-load drain) processes the responses.
+        """
+        cfg = self.config
+        for num in cfg.get(CONF_INPUTS, []):
+            await self.client.request_input_state(int(num))
+        for num in cfg.get(CONF_ZONES, []):
+            await self.client.request_zone_state(int(num))
+        for num in cfg.get(CONF_CONTROL_GROUPS, []):
+            await self.client.request_control_group_state(int(num))
+        for num in cfg.get(CONF_ROOMS, []):
+            await self.client.request_room_state(int(num))
 
     async def _collect_crosspoint_data(self, data: dict[str, Any]) -> None:
         """Collect crosspoint (send) data."""
@@ -249,16 +204,14 @@ class AhmCoordinator(DataUpdateCoordinator):
     async def _get_input_to_zone_send_data(self, input_num: int, zone_num: int) -> dict[str, Any] | None:
         """Get data for an input-to-zone send."""
         try:
-            tasks = [
-                self.client.get_send_muted("input", input_num, zone_num),
-                self.client.get_send_level("input", input_num, zone_num),
-            ]
-            
-            muted, level = await asyncio.gather(*tasks, return_exceptions=True)
-            
+            # Sequential (not gathered) so their lock acquisitions don't overlap,
+            # which would widen the window for the push-listener race condition.
+            muted = await self.client.get_send_muted("input", input_num, zone_num)
+            level = await self.client.get_send_level("input", input_num, zone_num)
+
             return {
-                "muted": muted if not isinstance(muted, Exception) else None,
-                "level": level if not isinstance(level, Exception) else None,
+                "muted": muted,
+                "level": level,
                 "source_type": "input",
                 "source_num": input_num,
                 "dest_zone": zone_num,
@@ -270,16 +223,12 @@ class AhmCoordinator(DataUpdateCoordinator):
     async def _get_zone_to_zone_send_data(self, source_zone: int, dest_zone: int) -> dict[str, Any] | None:
         """Get data for a zone-to-zone send."""
         try:
-            tasks = [
-                self.client.get_send_muted("zone", source_zone, dest_zone),
-                self.client.get_send_level("zone", source_zone, dest_zone),
-            ]
-            
-            muted, level = await asyncio.gather(*tasks, return_exceptions=True)
-            
+            muted = await self.client.get_send_muted("zone", source_zone, dest_zone)
+            level = await self.client.get_send_level("zone", source_zone, dest_zone)
+
             return {
-                "muted": muted if not isinstance(muted, Exception) else None,
-                "level": level if not isinstance(level, Exception) else None,
+                "muted": muted,
+                "level": level,
                 "source_type": "zone",
                 "source_num": source_zone,
                 "dest_zone": dest_zone,
