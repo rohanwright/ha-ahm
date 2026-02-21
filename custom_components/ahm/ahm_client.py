@@ -444,7 +444,7 @@ class AhmClient:
             if addrs is None:
                 return None
             snd_n, snd_ch, dest_ch = addrs
-            result = await self.query_sysex(f"01010F02{dest_ch}{snd_n}{snd_ch}F7")
+            result = await self.query_sysex(f"{snd_n}010F02{snd_ch}01{dest_ch}F7")
             if result and len(result) >= 3:
                 return result[-2]
             return None
@@ -473,7 +473,7 @@ class AhmClient:
             if addrs is None:
                 return None
             snd_n, snd_ch, dest_ch = addrs
-            result = await self.query_sysex(f"01010F03{dest_ch}{snd_n}{snd_ch}F7")
+            result = await self.query_sysex(f"{snd_n}010F03{snd_ch}01{dest_ch}F7")
             if result and len(result) >= 3:
                 return result[-2] > 63
             return None
