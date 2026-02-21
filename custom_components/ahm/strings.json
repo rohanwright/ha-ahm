@@ -78,7 +78,7 @@
       "fields": {
         "track_id": {
           "name": "Track ID",
-          "description": "The audio track ID to play (0-127)"
+          "description": "The audio track ID to play (1-128)"
         },
         "channel": {
           "name": "Playback Channel",

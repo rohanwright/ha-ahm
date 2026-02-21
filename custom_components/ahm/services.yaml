@@ -26,12 +26,12 @@ play_audio:
   fields:
     track_id:
       name: Track ID
-      description: The audio track ID to play (0-127)
+      description: The audio track ID to play (1-128)
       required: true
       selector:
         number:
-          min: 0
-          max: 127
+          min: 1
+          max: 128
           mode: box
     channel:
       name: Playback Channel

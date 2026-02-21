@@ -1,199 +1,223 @@
 # Example configuration for AHM Zone Mixer integration
-# This integration is configured via the UI, but here are some automation examples
+# This integration is configured entirely via the UI (Settings → Devices & Services).
+#
+# ENTITY IDs: Entity IDs are derived from the device's friendly name and channel number,
+# e.g. "AHM 1" → ahm_1_input_1_level / ahm_1_zone_2_mute etc.
+# After pressing "Fetch Channel Names", entities are renamed using the AHM display names:
+#   Input 1 = "Spotify"  →  number.spotify_level,  switch.spotify_mute
+#   Zone 1  = "Foyer"    →  number.foyer_level,     switch.foyer_mute
+# Crosspoints follow a "Destination Source" pattern:
+#   Input 1 → Zone 1     →  number.foyer_spotify_level, switch.foyer_spotify_mute
+#
+# The examples below use named entity IDs (after Fetch Channel Names).
+# Substitute the numbered forms (ahm_1_input_1_level etc.) if names have not been fetched.
 
-# Example automation: Mute all inputs during announcements
+# ---------------------------------------------------------------------------
+# Fetch Channel Names — call this once after installing or renaming channels
+# ---------------------------------------------------------------------------
+# Press the "Fetch Channel Names" button in Settings → Devices & Services → AHM Zone Mixer,
+# or trigger it from an automation:
 automation:
-  - alias: "PA System - Mute inputs during announcement"
+  - alias: "AHM - Refresh channel names on startup"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: "00:00:10"   # wait for integration to connect
+      - service: button.press
+        target:
+          entity_id: button.ahm_1_fetch_channel_names
+
+# ---------------------------------------------------------------------------
+# PA Announcement — mute background music and play an announcement track
+# ---------------------------------------------------------------------------
+  - alias: "PA System - Start announcement"
     trigger:
       - platform: state
         entity_id: input_boolean.pa_announcement
-        to: 'on'
+        to: "on"
     action:
       - service: switch.turn_on
         target:
           entity_id:
-            - switch.ahm_input_1_mute
-            - switch.ahm_input_2_mute
-            - switch.ahm_input_3_mute
-            - switch.ahm_input_4_mute
+            - switch.foyer_spotify_mute        # mute Spotify send to Foyer
+            - switch.boardroom_spotify_mute    # mute Spotify send to Boardroom
       - service: ahm.recall_preset
         data:
-          preset_number: 10  # Announcement preset
+          preset_number: 10   # Announcement preset
 
-  - alias: "PA System - Restore inputs after announcement" 
+  - alias: "PA System - End announcement"
     trigger:
       - platform: state
         entity_id: input_boolean.pa_announcement
-        to: 'off'
+        to: "off"
     action:
       - service: switch.turn_off
         target:
           entity_id:
-            - switch.ahm_input_1_mute
-            - switch.ahm_input_2_mute
-            - switch.ahm_input_3_mute
-            - switch.ahm_input_4_mute
+            - switch.foyer_spotify_mute
+            - switch.boardroom_spotify_mute
       - service: ahm.recall_preset
         data:
-          preset_number: 1   # Normal operation preset
+          preset_number: 1    # Normal operation preset
 
-# Example script: Emergency evacuation audio
+# ---------------------------------------------------------------------------
+# Doorbell — pause music briefly and play a chime
+# ---------------------------------------------------------------------------
+  - alias: "Doorbell chime"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.doorbell
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.foyer_spotify_mute
+      - service: ahm.play_audio
+        data:
+          track_id: 1       # Track 1 in AHM UI (1-indexed, matching AHM display)
+          channel: 0        # Mono 1
+      - delay: "00:00:05"
+      - service: switch.turn_off
+        target:
+          entity_id: switch.foyer_spotify_mute
+
+# ---------------------------------------------------------------------------
+# Meeting Room Audio Routing — route microphone to meeting rooms for PA
+# ---------------------------------------------------------------------------
+  - alias: "Meeting Room - Start PA routing"
+    description: "Enable microphone crosspoint sends to meeting rooms"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.pa_announcement
+        to: "on"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id:
+            - switch.meeting_room_a_microphone_mute   # Input 1 → Zone 2
+            - switch.meeting_room_b_microphone_mute   # Input 1 → Zone 3
+      - service: number.set_value
+        target:
+          entity_id:
+            - number.meeting_room_a_microphone_level
+            - number.meeting_room_b_microphone_level
+        data:
+          value: 79   # MIDI 79 ≈ -6 dB — moderate announcement level
+
+  - alias: "Meeting Room - End PA routing"
+    description: "Mute microphone sends when PA is inactive"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.pa_announcement
+        to: "off"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id:
+            - switch.meeting_room_a_microphone_mute
+            - switch.meeting_room_b_microphone_mute
+
+# ---------------------------------------------------------------------------
+# Zone-to-zone overflow routing — feed lounge audio to overflow areas
+# ---------------------------------------------------------------------------
+  - alias: "Background Music to Overflow"
+    description: "Enable zone-to-zone send when overflow areas are occupied"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.overflow_occupancy
+        to: "on"
+    action:
+      - service: switch.turn_off
+        target:
+          entity_id:
+            - switch.overflow_a_lounge_mute   # Zone 1 → Zone 4
+            - switch.overflow_b_lounge_mute   # Zone 1 → Zone 5
+      - service: number.set_value
+        target:
+          entity_id:
+            - number.overflow_a_lounge_level
+            - number.overflow_b_lounge_level
+        data:
+          value: 64   # MIDI 64 ≈ -20 dB — low background level
+
+  - alias: "Background Music to Overflow - Off"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.overflow_occupancy
+        to: "off"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id:
+            - switch.overflow_a_lounge_mute
+            - switch.overflow_b_lounge_mute
+
+# ---------------------------------------------------------------------------
+# Emergency evacuation — recall emergency preset and play evacuation audio
+# ---------------------------------------------------------------------------
 script:
   emergency_evacuation:
-    alias: "Emergency Evacuation Announcement"
+    alias: "Emergency Evacuation"
     sequence:
       - service: ahm.recall_preset
         data:
-          preset_number: 99  # Emergency preset
+          preset_number: 99   # Emergency preset
       - service: ahm.play_audio
         data:
-          track_id: 127     # Emergency evacuation track
-          channel: 2        # Stereo
-      - delay: '00:00:30'   # 30 second announcement
+          track_id: 128       # Last track — emergency evacuation audio (1-indexed)
+          channel: 2          # Stereo
+      - delay: "00:00:30"
       - service: ahm.recall_preset
         data:
-          preset_number: 1  # Return to normal
+          preset_number: 1    # Return to normal
 
-# Example scene: Conference room setup
-scene:
-  - name: "Conference Room Active"
-    entities:
-      media_player.ahm_zone_1:
-        volume_level: 0.7   # 70% volume
-        is_volume_muted: false
-      media_player.ahm_zone_2:
-        volume_level: 0.7
-        is_volume_muted: false
-      number.ahm_input_1_level:
-        value: -6           # -6dB for conference microphone
-      number.ahm_input_2_level:
-        value: -10          # -10dB for presentation audio
-
-  - name: "Conference Room Standby"
-    entities:
-      media_player.ahm_zone_1:
-        is_volume_muted: true
-      media_player.ahm_zone_2:
-        is_volume_muted: true
-      number.ahm_input_1_level:
-        value: -20          # Lower standby levels
-      number.ahm_input_2_level:
-        value: -20
-
-# Example template sensors for monitoring
-template:
-  - sensor:
-      - name: "AHM Zone 1 Volume dB"
-        state: "{{ state_attr('number.ahm_zone_1_level', 'value') }}"
-        unit_of_measurement: "dB"
-        device_class: sound_pressure
-        
-      - name: "AHM Active Inputs"
-        state: >
-          {% set inputs = [
-            'switch.ahm_input_1_mute',
-            'switch.ahm_input_2_mute', 
-            'switch.ahm_input_3_mute',
-            'switch.ahm_input_4_mute'
-          ] %}
-          {{ inputs | selectattr('states', 'eq', 'off') | list | count }}
-        attributes:
-          unmuted_inputs: >
-            {% set inputs = [
-              'switch.ahm_input_1_mute',
-              'switch.ahm_input_2_mute',
-              'switch.ahm_input_3_mute', 
-              'switch.ahm_input_4_mute'
-            ] %}
-            {{ inputs | selectattr('states', 'eq', 'off') | map('regex_replace', 'switch.ahm_input_(\d+)_mute', 'Input \\1') | list }}
-
-# Example input boolean for PA system control
-input_boolean:
-  pa_announcement:
-    name: "PA Announcement Active"
-    icon: mdi:microphone
-
-# Example input number for master volume control
+# ---------------------------------------------------------------------------
+# Master volume slider — map a 0-100 input_number to MIDI 0-127
+# ---------------------------------------------------------------------------
 input_number:
   master_volume:
     name: "Master Volume"
     min: 0
     max: 100
-    step: 5
+    step: 1
     unit_of_measurement: "%"
     icon: mdi:volume-high
 
-# Example automation to sync master volume with zones
+input_boolean:
+  pa_announcement:
+    name: "PA Announcement Active"
+    icon: mdi:microphone
+
 automation:
   - alias: "Sync Master Volume to Zones"
     trigger:
       - platform: state
         entity_id: input_number.master_volume
     action:
-      - service: media_player.volume_set
-        target:
-          entity_id:
-            - media_player.ahm_zone_1
-            - media_player.ahm_zone_2
-            - media_player.ahm_zone_3        data:
-          volume_level: "{{ states('input_number.master_volume') | float / 100 }}"
-
-  # Example automation using crosspoint controls for smart routing
-  - alias: "Meeting Room Audio Routing"
-    description: "Route microphone to meeting rooms when PA is active"
-    trigger:
-      - platform: state
-        entity_id: input_boolean.pa_announcement
-        to: 'on'
-    action:
-      # Unmute microphone sends to meeting room zones
-      - service: switch.turn_off
-        target:
-          entity_id:
-            - switch.input_1_to_zone_2_send_mute  # Microphone to Meeting Room A
-            - switch.input_1_to_zone_3_send_mute  # Microphone to Meeting Room B
-      # Set appropriate send levels for announcements
       - service: number.set_value
         target:
           entity_id:
-            - number.input_1_to_zone_2_send_level
-            - number.input_1_to_zone_3_send_level
+            - number.foyer_level
+            - number.boardroom_level
         data:
-          value: -10  # Moderate level for PA announcements
+          # Map 0-100 % → MIDI 0-127
+          value: "{{ (states('input_number.master_volume') | float / 100 * 127) | round(0) | int }}"
 
-  - alias: "End Meeting Room Audio Routing"
-    description: "Mute microphone sends when PA is inactive"
-    trigger:
-      - platform: state
-        entity_id: input_boolean.pa_announcement
-        to: 'off'
-    action:
-      # Mute microphone sends to meeting room zones
-      - service: switch.turn_on
-        target:
-          entity_id:
-            - switch.input_1_to_zone_2_send_mute
-            - switch.input_1_to_zone_3_send_mute
+# ---------------------------------------------------------------------------
+# Template sensors — monitoring helpers
+# ---------------------------------------------------------------------------
+template:
+  - sensor:
+      - name: "AHM Zone 1 MIDI Level"
+        state: "{{ states('number.foyer_level') }}"
+        unit_of_measurement: "MIDI"
 
-  # Example automation for zone-to-zone feeds
-  - alias: "Background Music to Overflow Areas"
-    description: "Route main lounge audio to overflow areas when busy"
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.lounge_occupancy
-        to: 'on'
-    action:
-      # Enable zone-to-zone send from main lounge to overflow areas
-      - service: switch.turn_off
-        target:
-          entity_id:
-            - switch.zone_1_to_zone_4_send_mute  # Main Lounge to Overflow A
-            - switch.zone_1_to_zone_5_send_mute  # Main Lounge to Overflow B
-      # Set appropriate levels
-      - service: number.set_value
-        target:
-          entity_id:
-            - number.zone_1_to_zone_4_send_level
-            - number.zone_1_to_zone_5_send_level
-        data:
-          value: -20  # Lower level for background music
+      - name: "AHM Unmuted Input Count"
+        state: >
+          {% set inputs = [
+            'switch.spotify_mute',
+            'switch.microphone_mute',
+            'switch.aux_in_mute'
+          ] %}
+          {{ inputs | selectattr('states', 'eq', 'off') | list | count }}

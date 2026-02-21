@@ -103,7 +103,7 @@ async def _async_register_services(hass: HomeAssistant, coordinator: AhmCoordina
         if target is None:
             _LOGGER.error("ahm.play_audio: no AHM coordinator found for call %s", call.data)
             return
-        await target.async_play_audio(call.data["track_id"], call.data.get("channel", 0))
+        await target.async_play_audio(call.data["track_id"] - 1, call.data.get("channel", 0))
 
     hass.services.async_register(
         DOMAIN,
@@ -120,7 +120,7 @@ async def _async_register_services(hass: HomeAssistant, coordinator: AhmCoordina
         "play_audio",
         play_audio,
         schema=vol.Schema({
-            vol.Required("track_id"): vol.All(int, vol.Range(min=0, max=127)),
+            vol.Required("track_id"): vol.All(int, vol.Range(min=1, max=128)),
             vol.Optional("channel", default=0): vol.All(vol.Coerce(int), vol.In([0, 1, 2])),
             vol.Optional("entry_id"): str,
         }),

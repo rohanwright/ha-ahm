@@ -5,30 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.2.0] - 2025-07-09
+
+### Added
+- **Channel Name Sync**: New "Fetch Channel Names" button entity requests display names from the AHM for all configured channels. Entities are renamed immediately (e.g. `Spotify Level`, `Foyer Mute`, `Foyer Spotify Level`)
+- **Name persistence**: Fetched channel names are saved to HA storage and automatically restored on integration reload or Home Assistant restart — no need to re-fetch after reboot
+- **Dynamic entity names**: All channel entities (inputs, zones, control groups, crosspoints) now reflect AHM display names. Crosspoint entities follow the pattern `<Zone> <Input> Level/Mute` (destination first)
+- **Channel names in config/options flows**: Connection setup now fetches names from the AHM so selection screens show `"Input 1 - Spotify"` rather than plain `"Input 1"`. Options flow loads persisted names from storage on open
+- **Multi-device entity naming**: Entity names and unique IDs are prefixed with the device's configured friendly name, ensuring clarity when multiple AHM units are present (e.g. `AHM 1 Input 1 Level` vs `AHM 2 Input 1 Level`)
+- **Model selection**: Setup flow now asks for device model (AHM-16, AHM-32, or AHM-64). Channel count limits are enforced per model during entity selection
+
+### Changed
+- **Real-time push listener**: Replaced 5-second polling with a persistent TCP push listener that reacts to state changes (mute, level, crosspoint) within 0.5 seconds. A 60-second safety poll continues to run in the background
+- **`play_audio` track_id is now 1-indexed**: `track_id` in the `ahm.play_audio` service now matches the AHM UI (1–128). The integration converts to 0-indexed internally before transmission. **Breaking change** — update any automations using `track_id: 0` to `track_id: 1`, etc.
+- Crosspoints now have both a level (Number) and mute (Switch) entity per send
+
+### Fixed
+- NUL byte padding in AHM name responses is now stripped correctly; unnamed channels no longer appear with NUL characters in their entity names
+
 ## [1.0.0] - 2025-06-23
 
 ### Added
 - Initial release of AHM Zone Mixer integration
 - Support for Allen & Heath AHM Zone Mixer devices with Firmware V1.5
-- Media player entities for volume and mute control
-- Number entities for precise dB level adjustment
+- Number entities for level control (raw MIDI 0–127) for inputs, zones, and control groups
 - Switch entities for dedicated mute controls
-- Configuration flow with entity selection
-- Services for preset recall and audio playback
-- Support for inputs, zones, control groups, and rooms
+- Crosspoint (send) controls — level and mute per input-to-zone and zone-to-zone send
+- Configuration flow with entity and crosspoint selection
+- `ahm.recall_preset` service (presets 1–500)
+- `ahm.play_audio` service with channel selection (Mono 1, Mono 2, Stereo)
 - HACS compatibility
-- Comprehensive documentation and examples
-
-### Features
-- Control up to 64 inputs, 64 zones, 32 control groups, and 16 rooms
-- Real-time status polling with 5-second update interval
-- Volume range: -48dB to +10dB with 0.5dB precision
-- Preset recall (1-500 presets across 4 banks)
-- Audio track playback with channel selection
-- Async communication with proper error handling
-- Device info integration with Home Assistant
+- Debug logging (TX/RX MIDI hex output)
 
 ### Requirements
 - Home Assistant 2025.6.0 or later
 - Allen & Heath AHM Zone Mixer with Firmware V1.5
-- Network connectivity to AHM device
+- TCP port 51325 accessible from the HA host

@@ -8,12 +8,15 @@ A Home Assistant custom integration for controlling Allen & Heath AHM Zone Mixer
 
 ## Features
 
-- **Media Player Entities**: Volume and mute control for inputs, zones, control groups, and rooms
-- **Number Entities**: Fine-grained dB level control (-48dB to +10dB)
-- **Switch Entities**: Dedicated mute/unmute controls with appropriate icons
-- **Crosspoint (Send) Controls**: Full control over input-to-zone and zone-to-zone sends
-- **Services**: Preset recall and audio playback triggers
-- **Configurable Entity Creation**: Choose exactly which inputs/outputs to control and which crosspoints to create
+- **Real-time push updates**: State changes (knob turns, mute presses) are reflected in HA within 0.5 seconds
+- **Number Entities**: Raw MIDI level control (0–127) for inputs, zones, control groups, and crosspoint sends
+- **Switch Entities**: Dedicated mute/unmute controls with volume icons
+- **Crosspoint (Send) Controls**: Level and mute for input-to-zone and zone-to-zone sends
+- **Channel Name Sync**: Fetch display names programmed on the AHM device — entities rename automatically and names persist across restarts
+- **Multi-device Support**: Each device is identified by its configured name, so entities are unambiguous when multiple AHM units are present
+- **Model Selection**: AHM-16, AHM-32, and AHM-64 — entity selection is constrained to the actual channel count
+- **Services**: Preset recall (1–500) and audio playback (tracks 1–128)
+- **Configurable Entity Creation**: Choose exactly which inputs, zones, control groups, and crosspoints to expose
 - **HACS Compatible**: Easy installation and updates through HACS
 
 ## Installation
@@ -37,42 +40,60 @@ A Home Assistant custom integration for controlling Allen & Heath AHM Zone Mixer
 
 ### Initial Setup
 
-1. **Device Connection**: Enter your AHM device's IP address and firmware version
-2. **Entity Selection**: Choose which inputs, zones, control groups, and rooms you want to control
-3. **Crosspoint Configuration**: For each selected zone, a dedicated screen lets you choose which inputs and other zones should have send (crosspoint) controls routed to it
-   - Leaving a zone's selections empty is valid — no crosspoint entities are created for that zone
-   - Both a level number entity and a mute switch entity are created for every selected send
-   - Crosspoint routing can be changed at any time via **Settings → Devices & Services → AHM Zone Mixer → Configure**
+1. **Connection**: Enter the AHM device's IP address, a friendly name for the device (e.g. `AHM 1`), and choose the model (AHM-16, AHM-32, or AHM-64).
 
-### Supported Entities
+   > During this step the integration connects to the device and fetches all channel display names — these appear immediately in the next steps so you see `"Input 1 - Spotify"` instead of just `"Input 1"`.
 
-- **Inputs**: Up to 64 input channels
-- **Zones**: Up to 64 zone outputs  
-- **Control Groups**: Up to 32 control groups
-- **Rooms**: Up to 16 rooms
-- **Crosspoints**: Input-to-zone and zone-to-zone sends (routing controls)
+2. **Entity Selection**: Choose which inputs, zones, and control groups to create entities for. The maximum values shown match your chosen model.
+
+3. **Crosspoint Configuration**: For each selected zone, a dedicated screen lets you choose which inputs and zones should have send (crosspoint) controls routed to it. Both a level number and a mute switch are created for every selected send. Leaving a zone's selections empty is valid.
+
+Routing can be changed at any time under **Settings → Devices & Services → AHM Zone Mixer → Configure**.
+
+### Supported Channels
+
+| Model | Inputs | Zones | Control Groups |
+|---|---|---|---|
+| AHM-16 | up to 16 | up to 16 | up to 32 |
+| AHM-32 | up to 32 | up to 32 | up to 32 |
+| AHM-64 | up to 64 | up to 64 | up to 32 |
 
 ### Entity Types Created
 
-For each selected input, zone, control group, and room, the integration creates:
+For each selected input, zone, or control group:
 
-- **Media Player**: Primary volume and mute control (appears in media player cards)
-- **Number**: Precise dB level adjustment (-48 to +10 dB in 0.5dB steps)
-- **Switch**: Dedicated mute toggle with volume icons
+- **Number**: Level control (raw MIDI 0–127)
+- **Switch**: Mute toggle
 
-For each configured crosspoint (send), the integration creates:
+For each configured crosspoint (send):
 
-- **Number**: Send level control (-48 to +10 dB in 0.5dB steps) 
+- **Number**: Send level control (raw MIDI 0–127)
 - **Switch**: Send mute toggle
+
+### Reconfiguring After Setup
+
+Open **Settings → Devices & Services**, find your AHM device, and click **Configure**. The options flow pre-populates all current selections. If channel names have previously been fetched they will already appear in the selection lists.
+
+### Channel Names
+
+Press the **Fetch Channel Names** button (found under the device's configuration category) to request display names from the AHM for all configured channels. Entities are renamed immediately:
+
+| Without names | With names fetched |
+|---|---|
+| `AHM 1 Input 1 Level` | `Spotify Level` |
+| `AHM 1 Zone 1 Mute` | `Foyer Mute` |
+| `AHM 1 Input 1 to Zone 1 Send Level` | `Foyer Spotify Level` |
+
+Names survive integration reloads and Home Assistant restarts — you only need to press the button again when names are changed on the device.
 
 ### Crosspoint Entity Examples
 
-When you configure crosspoint controls, entities are created with descriptive names:
+When you configure crosspoint controls, entities are created with descriptive names. Examples with a device named `AHM 1` and Input 1 = "Spotify", Zone 3 = "Foyer":
 
-- `number.input_1_to_zone_3_send_level` - Controls the send level from Input 1 to Zone 3
-- `switch.input_1_to_zone_3_send_mute` - Mutes/unmutes the send from Input 1 to Zone 3
-- `number.zone_2_to_zone_4_send_level` - Controls the send level from Zone 2 to Zone 4
-- `switch.zone_2_to_zone_4_send_mute` - Mutes/unmutes the send from Zone 2 to Zone 4
+- `number.foyer_spotify_level` — send level from Input 1 (Spotify) to Zone 3 (Foyer)
+- `switch.foyer_spotify_mute` — mutes/unmutes that send
+- `number.ahm_1_input_1_to_zone_3_send_level` — same entity before names are fetched
+- `switch.ahm_1_input_1_to_zone_3_send_mute` — same entity before names are fetched
 
 ## Services
 
@@ -81,129 +102,126 @@ When you configure crosspoint controls, entities are created with descriptive na
 Recall a preset on the AHM device.
 
 **Parameters:**
-- `preset_number` (required): Preset number (1-500)
-- `entry_id` (optional): Config entry ID of the target device. Only needed when more than one AHM device is configured.
+
+| Field | Required | Description |
+|---|---|---|
+| `preset_number` | Yes | Preset number (1–500) |
+| `entry_id` | No | Config entry ID of the target device. Only needed when more than one AHM device is configured. |
 
 **Example:**
 ```yaml
 service: ahm.recall_preset
 data:
-  preset_number: 1
+  preset_number: 42
 ```
 
 **Multi-device example:**
 ```yaml
 service: ahm.recall_preset
 data:
-  preset_number: 1
-  entry_id: "abc123def456..."  # Settings → Devices → AHM → URL
+  preset_number: 42
+  entry_id: "abc123def456"   # found in Settings → Devices → AHM → URL
 ```
 
 ### `ahm.play_audio`
 
-Trigger audio playback on the AHM device.
+Trigger audio file playback on the AHM device.
 
 **Parameters:**
-- `track_id` (required): Audio track ID (0-127)
-- `channel` (optional): Playback channel (0=Mono 1, 1=Mono 2, 2=Stereo, default=0)
-- `entry_id` (optional): Config entry ID of the target device. Only needed when more than one AHM device is configured.
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `track_id` | Yes | — | Audio track number (1–128, matching the AHM UI) |
+| `channel` | No | `0` | Playback channel: `0` = Mono 1, `1` = Mono 2, `2` = Stereo |
+| `entry_id` | No | — | Config entry ID. Only needed with multiple AHM devices. |
 
 **Example:**
 ```yaml
 service: ahm.play_audio
 data:
-  track_id: 5
-  channel: 2  # Stereo
+  track_id: 1     # Track 1 as shown in the AHM UI
+  channel: 2      # Stereo
 ```
 
 ## Usage Examples
 
-### Volume Control
+### Level Control
+
 ```yaml
-# Set input 1 to -10dB using number entity
+# Set input level (raw MIDI 0-127; MIDI 84 ≈ 0 dB)
 service: number.set_value
 target:
-  entity_id: number.ahm_input_1_level
+  entity_id: number.spotify_level   # or number.ahm_1_input_1_level before names are fetched
 data:
-  value: -10
-
-# Set zone 3 volume to 50% using media player
-service: media_player.volume_set
-target:
-  entity_id: media_player.ahm_zone_3
-data:
-  volume_level: 0.5
+  value: 84
 ```
 
 ### Mute Control
+
 ```yaml
-# Mute input 2 using switch
+# Mute a zone
 service: switch.turn_on
 target:
-  entity_id: switch.ahm_input_2_mute
+  entity_id: switch.foyer_mute
 
-# Mute zone 1 using media player
-service: media_player.volume_mute
+# Unmute a crosspoint send
+service: switch.turn_off
 target:
-  entity_id: media_player.ahm_zone_1
-data:
-  is_volume_muted: true
+  entity_id: switch.foyer_spotify_mute
 ```
 
 ### Automation Example
+
 ```yaml
 automation:
-  - alias: "Mute all inputs when doorbell rings"
+  - alias: "Doorbell — pause music and play chime"
     trigger:
       - platform: state
         entity_id: binary_sensor.doorbell
-        to: 'on'
+        to: "on"
     action:
       - service: switch.turn_on
         target:
-          entity_id: 
-            - switch.ahm_input_1_mute
-            - switch.ahm_input_2_mute
-            - switch.ahm_input_3_mute
+          entity_id: switch.foyer_spotify_mute   # mute Spotify send to Foyer
       - service: ahm.play_audio
         data:
-          track_id: 1  # Doorbell chime
-          channel: 2   # Stereo
-      - delay: '00:00:05'
+          track_id: 1    # doorbell chime — track number as shown in AHM UI
+          channel: 0     # Mono 1
+      - delay: "00:00:05"
       - service: switch.turn_off
         target:
-          entity_id: 
-            - switch.ahm_input_1_mute
-            - switch.ahm_input_2_mute  
-            - switch.ahm_input_3_mute
+          entity_id: switch.foyer_spotify_mute   # restore
 ```
+
+## Real-time Updates
+
+The integration uses a persistent TCP connection to the AHM and runs a background push listener that wakes every 0.5 seconds to process any incoming MIDI messages (mute presses, knob turns, crosspoint changes). HA state updates immediately on detection — no waiting for a poll cycle.
+
+A 60-second safety poll runs in the background to catch any missed packets and keep state authoritative.
+
+If the TCP connection drops (e.g. AHM reboot), it is re-established automatically on the next poll cycle.
 
 ## Device Requirements
 
 - Allen & Heath AHM Zone Mixer with Firmware V1.5
 - Network connectivity to the AHM device
-- TCP port 51325 accessible (unencrypted) or 51327 (TLS/SSL encrypted)
+- TCP port 51325 accessible (unencrypted). Port 51327 (TLS/SSL) is not currently supported.
 
 ## Troubleshooting
 
 ### Connection Issues
-- Verify the AHM device IP address and network connectivity
-- Ensure the correct firmware version is specified (found on device front panel)
+- Verify the AHM device IP address and that it is reachable from the HA host
 - Check that TCP port 51325 is not blocked by firewalls
+- Check the AHM's network settings page to confirm TCP/IP control is enabled
 
-### Entity Updates
-- The integration polls the device every 5 seconds for status updates
-- Manual refresh can be triggered through the integration page
-- Some changes may take a moment to reflect in the UI
+### Entities Show "Unknown" After Startup
+- The integration fires GET requests on startup and waits 1 second for responses. If the AHM is slow to respond on a fresh connection, the next 60-second poll will fill in any missing values.
 
-### Performance
-- Select only the channels you need to reduce polling time
-- The integration uses a single persistent TCP connection for all communication
-- If the connection drops (e.g. device reboot), it reconnects automatically on the next poll cycle
+### Channel Names Not Appearing
+- Press **Fetch Channel Names** from the device page
+- If names still show as numbered defaults, check that the channels have names programmed on the AHM (unnamed channels transmit empty or NUL-padded responses, which are discarded)
 
 ### Debug Logging
-
-To see every raw MIDI packet sent and received, enable debug logging for the integration in your `configuration.yaml`:
 
 ```yaml
 logger:
@@ -211,25 +229,22 @@ logger:
     custom_components.ahm: debug
 ```
 
-Restart Home Assistant after adding this. Debug output will appear in the HA logs showing `TX:` (sent) and `RX:` (received) lines with the full hex bytes of each packet. This is useful for diagnosing protocol issues.
+Restart Home Assistant after adding this. Debug output shows `TX:` / `RX:` lines with full MIDI hex for every packet — useful for diagnosing protocol issues.
 
-To disable, remove the entry and restart again.
+## Protocol
 
-## Protocol Information
-
-This integration implements the AHM TCP/IP Protocol V1.5 using MIDI format messages over TCP/IP. For detailed protocol information, refer to the AHM documentation.
+This integration implements the Allen & Heath AHM TCP/IP Protocol V1.5 using MIDI format messages. All communication uses a single persistent TCP connection on port 51325.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+4. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
@@ -239,6 +254,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Allen & Heath for the AHM protocol documentation
+- Allen & Heath for the AHM TCP/IP protocol documentation
 - Home Assistant community for integration development guidelines
 - HACS for making custom component distribution easy
