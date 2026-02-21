@@ -204,8 +204,35 @@ class AhmCrosspointMuteSwitch(CoordinatorEntity, SwitchEntity):
         self._is_zone_to_zone = is_zone_to_zone
 
         source_type = "Zone" if is_zone_to_zone else "Input"
-        self._attr_name = f"{coordinator.device_name} {source_type} {source_num} to Zone {dest_zone} Send Mute"
+        self._default_name = f"{coordinator.device_name} {source_type} {source_num} to Zone {dest_zone} Send Mute"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{crosspoint_id}_mute"
+
+    def _channel_name(self, entity_type: str, number: int) -> str | None:
+        """Return the fetched AHM display name for a channel, or None if not yet available."""
+        if not self.coordinator.data:
+            return None
+        ch = self.coordinator.data.get(entity_type, {}).get(number)
+        return ch.get("name") if ch else None
+
+    @property
+    def name(self) -> str:
+        """Return the entity name.
+
+        Uses fetched AHM channel names when available:
+          "<dest zone name> <source name> Mute"
+        Falls back to the default numbered name when names have not been fetched.
+        """
+        source_type = "zones" if self._is_zone_to_zone else "inputs"
+        zone_name = self._channel_name("zones", self._dest_zone)
+        source_name = self._channel_name(source_type, self._source_num)
+        if zone_name and source_name:
+            return f"{zone_name} {source_name} Mute"
+        if zone_name and not source_name:
+            src_label = "Zone" if self._is_zone_to_zone else "Input"
+            return f"{zone_name} {src_label} {self._source_num} Mute"
+        if source_name and not zone_name:
+            return f"Zone {self._dest_zone} {source_name} Mute"
+        return self._default_name
 
     @property
     def device_info(self) -> dict[str, Any]:
