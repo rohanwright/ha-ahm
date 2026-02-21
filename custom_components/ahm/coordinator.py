@@ -102,11 +102,11 @@ class AhmCoordinator(DataUpdateCoordinator):
         """Fetch / refresh data from the AHM device.
 
         **First call** (``self.data is None``):
-          Sends GET requests for every configured channel entity, waits 500 ms
-          for the AHM to respond (responses are MIDI Note On / NRPN CC messages,
-          identical in format to unsolicited push messages), drains the queue,
-          applies state to build the initial data dictionary, then queries each
-          crosspoint individually via SysEx.
+          Sends GET requests for every configured channel entity, waits 1 second
+          for the AHM to respond (the device can be slow on a fresh TCP connection),
+          drains the queue, applies state, then queries each crosspoint via SysEx.
+          A second drain after crosspoint queries captures any channel responses
+          that arrived while the sequential crosspoint queries were running.
 
         **Subsequent calls** (regular 60-second poll):
           Re-requests all channel states and crosspoints so the integration
@@ -125,8 +125,19 @@ class AhmCoordinator(DataUpdateCoordinator):
             if messages:
                 self._apply_unsolicited_updates(messages, updated)
 
-            # Also refresh crosspoints.
-            await self._collect_crosspoint_data(updated)
+            # Refresh crosspoints (sequential SysEx queries with 200ms timeout each).
+            # _collect_crosspoint_data returns a fresh dict so HA's equality check
+            # detects changes and notifies entity listeners.
+            updated["crosspoints"] = await self._collect_crosspoint_data(
+                self.data.get("crosspoints", {})
+            )
+
+            # Final drain: capture any channel MIDI responses that arrived while
+            # crosspoint queries were in flight (each 200ms timeout can add up).
+            messages = self.client.drain_queue()
+            if messages:
+                self._apply_unsolicited_updates(messages, updated)
+
             return updated
 
         except Exception as err:
@@ -148,16 +159,27 @@ class AhmCoordinator(DataUpdateCoordinator):
         # Fire off GET requests for all channel entities (fire-and-forget).
         await self._request_all_channel_states()
 
-        # Give the AHM time to send back responses.  The reader places them in
-        # the queue as normal MIDI messages; we drain and apply them below.
-        await asyncio.sleep(0.5)
+        # Give the AHM time to send back responses.  Use a longer window for the
+        # very first connection — the device can be slower to respond on a fresh
+        # TCP session than on subsequent polls.
+        await asyncio.sleep(1.0)
 
         messages = self.client.drain_queue()
         if messages:
             self._apply_unsolicited_updates(messages, data)
 
         # Crosspoints respond with SysEx, not MIDI, so they need explicit polling.
-        await self._collect_crosspoint_data(data)
+        # This is sequential and may take several seconds when many crosspoints
+        # are unrouted (each timeout = 200 ms).
+        data["crosspoints"] = await self._collect_crosspoint_data(
+            data.get("crosspoints", {})
+        )
+
+        # Final drain: capture any channel responses that arrived while crosspoint
+        # queries were in flight (late arrivals on the first TCP connection).
+        messages = self.client.drain_queue()
+        if messages:
+            self._apply_unsolicited_updates(messages, data)
 
         return data
 
@@ -176,14 +198,15 @@ class AhmCoordinator(DataUpdateCoordinator):
         for num in cfg.get(CONF_CONTROL_GROUPS, []):
             await self.client.request_control_group_state(int(num))
 
-    async def _collect_crosspoint_data(self, data: dict[str, Any]) -> None:
-        """Collect crosspoint (send) data, merging fresh query results into existing state.
+    async def _collect_crosspoint_data(self, existing: dict[str, Any]) -> dict[str, Any]:
+        """Query all configured crosspoints and return a fresh crosspoints dict.
 
-        Existing values (from push updates or previous successful queries) are
-        preserved when a query times out, so a missed poll never blanks a
-        crosspoint that the push listener already has correct.
+        Always returns a new dict object so that HA's DataUpdateCoordinator
+        equality check detects changes and notifies entity listeners.  Values
+        from *existing* are used as fallbacks when a query times out (e.g. for
+        unrouted crosspoints the device never responds to).
         """
-        cp_data: dict[str, Any] = data.setdefault("crosspoints", {})
+        cp_data: dict[str, Any] = {}
 
         cfg = self.config
         input_to_zone_sends = cfg.get(CONF_INPUT_TO_ZONE_SENDS, {})
@@ -192,9 +215,8 @@ class AhmCoordinator(DataUpdateCoordinator):
             for input_str in input_list:
                 input_num = int(input_str)
                 crosspoint_id = f"input_{input_num}_to_zone_{dest_zone}"
-                # Ensure the entry exists so the push listener can update it even
-                # if every GET query times out.
-                cp_data.setdefault(crosspoint_id, {
+                # Seed from existing so a timeout preserves the last known value.
+                cp_data[crosspoint_id] = dict(existing.get(crosspoint_id) or {
                     "muted": None, "level": None,
                     "source_type": "input", "source_num": input_num, "dest_zone": dest_zone,
                 })
@@ -206,11 +228,13 @@ class AhmCoordinator(DataUpdateCoordinator):
             for source_zone_str in zone_list:
                 source_zone = int(source_zone_str)
                 crosspoint_id = f"zone_{source_zone}_to_zone_{dest_zone}"
-                cp_data.setdefault(crosspoint_id, {
+                cp_data[crosspoint_id] = dict(existing.get(crosspoint_id) or {
                     "muted": None, "level": None,
                     "source_type": "zone", "source_num": source_zone, "dest_zone": dest_zone,
                 })
                 await self._merge_crosspoint_data(cp_data, crosspoint_id, "zone", source_zone, dest_zone)
+
+        return cp_data
 
     async def _merge_crosspoint_data(
         self, cp_data: dict[str, Any], crosspoint_id: str, source_type: str, source_num: int, dest_zone: int
