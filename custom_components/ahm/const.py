@@ -6,10 +6,19 @@ DOMAIN: Final = "ahm"
 # Default values
 DEFAULT_NAME = "AHM Zone Mixer"
 DEFAULT_PORT = 51325
+DEFAULT_MODEL = "AHM-16"
 
 # Configuration
 CONF_HOST = "host"
 CONF_NAME = "name"
+CONF_MODEL = "model"
+
+# Device model limits: inputs, zones, control groups
+MODEL_LIMITS: Final = {
+    "AHM-16": {"inputs": 16, "zones": 16, "control_groups": 32},
+    "AHM-32": {"inputs": 32, "zones": 32, "control_groups": 32},
+    "AHM-64": {"inputs": 64, "zones": 64, "control_groups": 32},
+}
 CONF_INPUTS = "inputs"
 CONF_ZONES = "zones"
 CONF_CONTROL_GROUPS = "control_groups"
@@ -21,9 +30,7 @@ CONF_ZONE_TO_ZONE_SENDS = "zone_to_zone_sends"
 # fallback to catch any missed packets.
 UPDATE_INTERVAL = 60  # seconds
 
-# Device limits
-MAX_INPUTS = 64
-MAX_ZONES = 64
+# Device limits (absolute maximums across all models)
 MAX_CONTROL_GROUPS = 32
 MAX_PRESETS = 500
 

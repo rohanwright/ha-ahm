@@ -6,7 +6,8 @@
         "description": "Configure your Allen & Heath AHM Zone Mixer connection",
         "data": {
           "host": "IP Address",
-          "name": "Device Name"
+          "name": "Device Name",
+          "model": "Device Model"
         }
       },
       "entities": {

@@ -14,16 +14,16 @@ from .ahm_client import AhmClient
 from .const import (
     DOMAIN,
     DEFAULT_NAME,
+    DEFAULT_MODEL,
     CONF_HOST,
     CONF_NAME,
+    CONF_MODEL,
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
     CONF_INPUT_TO_ZONE_SENDS,
     CONF_ZONE_TO_ZONE_SENDS,
-    MAX_INPUTS,
-    MAX_ZONES,
-    MAX_CONTROL_GROUPS,
+    MODEL_LIMITS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,6 +79,7 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema({
             vol.Required(CONF_HOST): str,
             vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
+            vol.Required(CONF_MODEL, default=DEFAULT_MODEL): vol.In(list(MODEL_LIMITS.keys())),
         })
 
         return self.async_show_form(
@@ -108,16 +109,17 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=self.data,
                 )
 
-        # Build entity selection schema
+        # Build entity selection schema using the chosen model's limits.
+        limits = MODEL_LIMITS[self.data[CONF_MODEL]]
         data_schema = vol.Schema({
             vol.Optional(CONF_INPUTS, default=["1"]): cv.multi_select({
-                str(i): f"Input {i}" for i in range(1, MAX_INPUTS + 1)
+                str(i): f"Input {i}" for i in range(1, limits["inputs"] + 1)
             }),
             vol.Optional(CONF_ZONES, default=["1"]): cv.multi_select({
-                str(i): f"Zone {i}" for i in range(1, MAX_ZONES + 1)
+                str(i): f"Zone {i}" for i in range(1, limits["zones"] + 1)
             }),
             vol.Optional(CONF_CONTROL_GROUPS, default=[]): cv.multi_select({
-                str(i): f"Control Group {i}" for i in range(1, MAX_CONTROL_GROUPS + 1)
+                str(i): f"Control Group {i}" for i in range(1, limits["control_groups"] + 1)
             }),
         })
 
@@ -236,15 +238,17 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_zone_crosspoints()
             return self.async_create_entry(data=self._options)
 
+        # Restrict choices to the model's limits (model is always in entry.data).
+        limits = MODEL_LIMITS.get(cfg.get(CONF_MODEL, DEFAULT_MODEL), MODEL_LIMITS[DEFAULT_MODEL])
         data_schema = vol.Schema({
             vol.Optional(CONF_INPUTS, default=cfg.get(CONF_INPUTS, ["1"])): cv.multi_select(
-                {str(i): f"Input {i}" for i in range(1, MAX_INPUTS + 1)}
+                {str(i): f"Input {i}" for i in range(1, limits["inputs"] + 1)}
             ),
             vol.Optional(CONF_ZONES, default=cfg.get(CONF_ZONES, ["1"])): cv.multi_select(
-                {str(i): f"Zone {i}" for i in range(1, MAX_ZONES + 1)}
+                {str(i): f"Zone {i}" for i in range(1, limits["zones"] + 1)}
             ),
             vol.Optional(CONF_CONTROL_GROUPS, default=cfg.get(CONF_CONTROL_GROUPS, [])): cv.multi_select(
-                {str(i): f"Control Group {i}" for i in range(1, MAX_CONTROL_GROUPS + 1)}
+                {str(i): f"Control Group {i}" for i in range(1, limits["control_groups"] + 1)}
             ),
         })
 
