@@ -339,6 +339,52 @@ class AhmCoordinator(DataUpdateCoordinator):
             if not msg:
                 continue
 
+            # ---- SysEx: crosspoint (send level/mute) push -------------------
+            # The AHM sends unsolicited SysEx when a crosspoint changes, either
+            # from a hardware adjustment or as a confirmation after a SET command.
+            # Format (15 bytes total):
+            #   F0 00 00 1A 50 12 VV VV  ← 8-byte SysEx header
+            #   SND_N CMD DEST_CH 01 SND_CH VALUE F7
+            # SND_N: 00=input source, 01=zone source
+            # CMD:   02=level, 03=mute
+            # DEST_CH: destination zone, 0-indexed
+            # SND_CH: source channel, 0-indexed
+            # VALUE: raw MIDI level (0-127) or mute (>63=muted)
+            if msg[0] == 0xF0 and len(msg) == 15:
+                snd_n   = msg[8]
+                cmd     = msg[9]
+                dest_ch = msg[10]
+                # msg[11] = dest_n, always 01 (destination is always a zone)
+                snd_ch  = msg[12]
+                value   = msg[13]
+
+                if snd_n == 0x00:
+                    src_prefix = "input"
+                elif snd_n == 0x01:
+                    src_prefix = "zone"
+                else:
+                    continue
+
+                crosspoint_id = f"{src_prefix}_{snd_ch + 1}_to_zone_{dest_ch + 1}"
+                cp_data = data.get("crosspoints", {})
+                if crosspoint_id in cp_data:
+                    if cmd == 0x02:  # level
+                        cp_data[crosspoint_id]["level"] = value
+                        _LOGGER.debug(
+                            "Unsolicited crosspoint level: %s → %d",
+                            crosspoint_id, value,
+                        )
+                        updated = True
+                    elif cmd == 0x03:  # mute
+                        muted = value > 63
+                        cp_data[crosspoint_id]["muted"] = muted
+                        _LOGGER.debug(
+                            "Unsolicited crosspoint mute: %s → %s",
+                            crosspoint_id, "ON" if muted else "OFF",
+                        )
+                        updated = True
+                continue
+
             status = msg[0]
             msg_type = status & 0xF0
             n = status & 0x0F  # MIDI channel (device type)

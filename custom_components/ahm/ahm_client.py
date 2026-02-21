@@ -148,13 +148,14 @@ class AhmClient:
                     _LOGGER.debug("RX: %s", bytes(msg).hex(" ").upper())
 
                     if msg[0] == 0xF0:
-                        # SysEx — resolve crosspoint GET waiter if one is pending.
+                        # SysEx — resolve crosspoint GET waiter if one is pending,
+                        # otherwise queue it for the push listener to parse
+                        # (the device sends unsolicited SysEx when crosspoints change).
                         waiter = self._sysex_waiter
                         if waiter is not None and not waiter.done():
                             waiter.set_result(bytes(msg))
                         else:
-                            # Unsolicited SysEx (rare) — drop it, we can't parse it.
-                            _LOGGER.debug("Dropping unsolicited SysEx")
+                            await self._rx_queue.put(bytes(msg))
                     else:
                         # MIDI channel message — goes to push listener queue.
                         await self._rx_queue.put(bytes(msg))
@@ -463,7 +464,8 @@ class AhmClient:
                 return False
             snd_n, snd_ch, dest_ch = addrs
             lv = f"{max(0, min(127, int(level))):02x}"
-            return await self.send_sysex_command(f"0102{dest_ch}{snd_n}{snd_ch}{lv}F7")
+            # Format: snd_n(source type), 02(cmd), snd_ch(source ch), 01(zone dest), dest_ch, lv
+            return await self.send_sysex_command(f"{snd_n}02{snd_ch}01{dest_ch}{lv}F7")
         except Exception as err:
             _LOGGER.error("Failed to set send level %s %d->zone %d: %s", source_type, source_num, dest_zone, err)
             return False
@@ -491,7 +493,8 @@ class AhmClient:
                 return False
             snd_n, snd_ch, dest_ch = addrs
             val = "7F" if muted else "3F"
-            return await self.send_sysex_command(f"0103{dest_ch}{snd_n}{snd_ch}{val}F7")
+            # Format: snd_n(source type), 03(cmd), snd_ch(source ch), 01(zone dest), dest_ch, val
+            return await self.send_sysex_command(f"{snd_n}03{snd_ch}01{dest_ch}{val}F7")
         except Exception as err:
             _LOGGER.error("Failed to set send mute %s %d->zone %d: %s", source_type, source_num, dest_zone, err)
             return False
