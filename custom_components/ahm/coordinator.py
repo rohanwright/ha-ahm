@@ -253,8 +253,24 @@ class AhmCoordinator(DataUpdateCoordinator):
         restored immediately on startup without needing to press the button again.
         Channel numbers are stored as strings in JSON, so they are converted
         back to int when applied.
+
+        Priority:
+          1. The Store (``ahm_channel_names_<entry_id>.json``) — used on every
+             reload after the first time names are fetched.
+          2. ``entry.data["channel_names"]`` — seeded from the config flow when
+             names were fetched during initial setup (first run only).  When
+             found, the names are immediately promoted to the Store so that
+             subsequent loads use path 1.
         """
         stored: dict = await self._names_store.async_load() or {}
+
+        # First-run fallback: names were fetched during the config flow and
+        # embedded in entry.data.  Promote them to the Store now.
+        if not stored and self.entry.data.get("channel_names"):
+            stored = self.entry.data["channel_names"]
+            await self._names_store.async_save(stored)
+            _LOGGER.debug("Promoted config-flow channel names to storage")
+
         for entity_type, names in stored.items():
             if entity_type not in data:
                 continue
@@ -496,7 +512,9 @@ class AhmCoordinator(DataUpdateCoordinator):
                 ch_byte = msg[10]  # 0-indexed channel
                 raw_name = bytes(msg[11:-1])  # bytes between CH and F7 terminator
                 try:
-                    name = raw_name.decode("ascii").strip()
+                    # AHM pads short names to 8 chars with NUL bytes — strip them
+                    # before decoding, then strip any trailing/leading whitespace.
+                    name = raw_name.rstrip(b"\x00").decode("ascii").strip()
                 except (UnicodeDecodeError, ValueError):
                     name = ""
                 data_key = self._CH_MAP.get(n_byte)

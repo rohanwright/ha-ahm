@@ -66,7 +66,9 @@ async def _fetch_channel_names(
             data_key = _CH_NAME_MAP.get(msg[8])
             ch_num = msg[10] + 1  # wire is 0-indexed; store as 1-indexed
             try:
-                name = bytes(msg[11:-1]).decode("ascii").strip()
+                # AHM pads short names to 8 chars with NUL bytes — strip them
+                # before decoding, then strip any trailing/leading whitespace.
+                name = bytes(msg[11:-1]).rstrip(b"\x00").decode("ascii").strip()
             except (UnicodeDecodeError, ValueError):
                 name = ""
             if data_key and name:
@@ -154,6 +156,10 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self.data[CONF_ZONE_TO_ZONE_SENDS] = {}
                 return await self.async_step_zone_crosspoints()
             else:
+                self.data["channel_names"] = {
+                    et: {str(k): v for k, v in ch.items()}
+                    for et, ch in self._channel_names.items()
+                }
                 return self.async_create_entry(
                     title=self.data[CONF_NAME],
                     data=self.data,
@@ -198,6 +204,10 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         if self._current_zone_index >= len(self._selected_zones):
             # All zones visited — persist and finish.
+            self.data["channel_names"] = {
+                et: {str(k): v for k, v in ch.items()}
+                for et, ch in self._channel_names.items()
+            }
             return self.async_create_entry(
                 title=self.data[CONF_NAME],
                 data=self.data,
