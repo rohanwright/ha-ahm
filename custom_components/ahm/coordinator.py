@@ -177,8 +177,13 @@ class AhmCoordinator(DataUpdateCoordinator):
             await self.client.request_control_group_state(int(num))
 
     async def _collect_crosspoint_data(self, data: dict[str, Any]) -> None:
-        """Collect crosspoint (send) data."""
-        data["crosspoints"] = {}
+        """Collect crosspoint (send) data, merging fresh query results into existing state.
+
+        Existing values (from push updates or previous successful queries) are
+        preserved when a query times out, so a missed poll never blanks a
+        crosspoint that the push listener already has correct.
+        """
+        cp_data: dict[str, Any] = data.setdefault("crosspoints", {})
 
         cfg = self.config
         input_to_zone_sends = cfg.get(CONF_INPUT_TO_ZONE_SENDS, {})
@@ -187,56 +192,42 @@ class AhmCoordinator(DataUpdateCoordinator):
             for input_str in input_list:
                 input_num = int(input_str)
                 crosspoint_id = f"input_{input_num}_to_zone_{dest_zone}"
-                crosspoint_data = await self._get_input_to_zone_send_data(input_num, dest_zone)
-                if crosspoint_data:
-                    data["crosspoints"][crosspoint_id] = crosspoint_data
+                # Ensure the entry exists so the push listener can update it even
+                # if every GET query times out.
+                cp_data.setdefault(crosspoint_id, {
+                    "muted": None, "level": None,
+                    "source_type": "input", "source_num": input_num, "dest_zone": dest_zone,
+                })
+                await self._merge_crosspoint_data(cp_data, crosspoint_id, "input", input_num, dest_zone)
 
-        # Collect zone-to-zone sends
         zone_to_zone_sends = cfg.get(CONF_ZONE_TO_ZONE_SENDS, {})
         for dest_zone_str, zone_list in zone_to_zone_sends.items():
             dest_zone = int(dest_zone_str)
             for source_zone_str in zone_list:
                 source_zone = int(source_zone_str)
                 crosspoint_id = f"zone_{source_zone}_to_zone_{dest_zone}"
-                crosspoint_data = await self._get_zone_to_zone_send_data(source_zone, dest_zone)
-                if crosspoint_data:
-                    data["crosspoints"][crosspoint_id] = crosspoint_data
+                cp_data.setdefault(crosspoint_id, {
+                    "muted": None, "level": None,
+                    "source_type": "zone", "source_num": source_zone, "dest_zone": dest_zone,
+                })
+                await self._merge_crosspoint_data(cp_data, crosspoint_id, "zone", source_zone, dest_zone)
 
-    async def _get_input_to_zone_send_data(self, input_num: int, zone_num: int) -> dict[str, Any] | None:
-        """Get data for an input-to-zone send."""
+    async def _merge_crosspoint_data(
+        self, cp_data: dict[str, Any], crosspoint_id: str, source_type: str, source_num: int, dest_zone: int
+    ) -> None:
+        """Query a crosspoint and update only the fields the device replied to."""
         try:
-            # Sequential (not gathered) so their lock acquisitions don't overlap,
-            # which would widen the window for the push-listener race condition.
-            muted = await self.client.get_send_muted("input", input_num, zone_num)
-            level = await self.client.get_send_level("input", input_num, zone_num)
+            muted = await self.client.get_send_muted(source_type, source_num, dest_zone)
+            if muted is not None:
+                cp_data[crosspoint_id]["muted"] = muted
 
-            return {
-                "muted": muted,
-                "level": level,
-                "source_type": "input",
-                "source_num": input_num,
-                "dest_zone": zone_num,
-            }
+            level = await self.client.get_send_level(source_type, source_num, dest_zone)
+            if level is not None:
+                cp_data[crosspoint_id]["level"] = level
         except Exception as err:
-            _LOGGER.debug("Failed to get input %d to zone %d send data: %s", input_num, zone_num, err)
-            return None
-
-    async def _get_zone_to_zone_send_data(self, source_zone: int, dest_zone: int) -> dict[str, Any] | None:
-        """Get data for a zone-to-zone send."""
-        try:
-            muted = await self.client.get_send_muted("zone", source_zone, dest_zone)
-            level = await self.client.get_send_level("zone", source_zone, dest_zone)
-
-            return {
-                "muted": muted,
-                "level": level,
-                "source_type": "zone",
-                "source_num": source_zone,
-                "dest_zone": dest_zone,
-            }
-        except Exception as err:
-            _LOGGER.debug("Failed to get zone %d to zone %d send data: %s", source_zone, dest_zone, err)
-            return None
+            _LOGGER.debug(
+                "Failed to query crosspoint %s: %s", crosspoint_id, err
+            )
 
     def _optimistic_update(
         self, data_key: str, entity_num: int | str, field: str, value: Any
