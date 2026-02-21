@@ -111,16 +111,23 @@ class AhmCoordinator(DataUpdateCoordinator):
           crosspoint individually via SysEx.
 
         **Subsequent calls** (regular 60-second poll):
-          Channel entities are kept current by the push listener in real time, so
-          we skip the channel GET cycle entirely and only refresh crosspoint state
-          (which has no unsolicited push mechanism).
+          Re-requests all channel states and crosspoints so the integration
+          always has authoritative state from the device, catching any updates
+          missed by the push listener.
         """
         try:
             if self.data is None:
                 return await self._initial_load()
 
-            # Subsequent polls: only crosspoints need explicit querying.
+            # Periodic poll: refresh channel states (inputs/zones/CGs).
             updated = {**self.data}
+            await self._request_all_channel_states()
+            await asyncio.sleep(0.5)
+            messages = self.client.drain_queue()
+            if messages:
+                self._apply_unsolicited_updates(messages, updated)
+
+            # Also refresh crosspoints.
             await self._collect_crosspoint_data(updated)
             return updated
 
@@ -344,18 +351,19 @@ class AhmCoordinator(DataUpdateCoordinator):
             # from a hardware adjustment or as a confirmation after a SET command.
             # Format (15 bytes total):
             #   F0 00 00 1A 50 12 VV VV  ← 8-byte SysEx header
-            #   SND_N CMD DEST_CH 01 SND_CH VALUE F7
-            # SND_N: 00=input source, 01=zone source
-            # CMD:   02=level, 03=mute
+            #   SND_N CMD SND_CH 01 DEST_CH VALUE F7
+            # This is the same byte layout as the SET command.
+            # SND_N:   00=input source, 01=zone source
+            # CMD:     02=level, 03=mute
+            # SND_CH:  source channel, 0-indexed
             # DEST_CH: destination zone, 0-indexed
-            # SND_CH: source channel, 0-indexed
-            # VALUE: raw MIDI level (0-127) or mute (>63=muted)
+            # VALUE:   raw MIDI level (0-127) or mute (>63=muted)
             if msg[0] == 0xF0 and len(msg) == 15:
                 snd_n   = msg[8]
                 cmd     = msg[9]
-                dest_ch = msg[10]
+                snd_ch  = msg[10]  # source channel (same layout as SET command)
                 # msg[11] = dest_n, always 01 (destination is always a zone)
-                snd_ch  = msg[12]
+                dest_ch = msg[12]  # destination zone
                 value   = msg[13]
 
                 if snd_n == 0x00:
