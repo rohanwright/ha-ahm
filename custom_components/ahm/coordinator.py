@@ -29,6 +29,13 @@ _LOGGER = logging.getLogger(__name__)
 class AhmCoordinator(DataUpdateCoordinator):
     """AHM data update coordinator."""
 
+    # Maps MIDI channel byte (0=input, 1=zone, 2=control_group) to data dict key.
+    _CH_MAP: dict[int, str] = {
+        0: "inputs",
+        1: "zones",
+        2: "control_groups",
+    }
+
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
         self.entry = entry
@@ -36,6 +43,10 @@ class AhmCoordinator(DataUpdateCoordinator):
             host=entry.data[CONF_HOST],
         )
         self._push_task: asyncio.Task | None = None
+        # NRPN parsing state persisted across drain cycles so a level update
+        # split across two 0.5s drain windows is never silently dropped.
+        # Structure: {midi_channel_n: (nrpn_msb, nrpn_lsb)}
+        self._nrpn_state: dict[int, tuple[int | None, int | None]] = {}
 
         super().__init__(
             hass,
@@ -70,7 +81,9 @@ class AhmCoordinator(DataUpdateCoordinator):
                 await asyncio.sleep(0.5)
                 messages = self.client.drain_queue()
                 if messages and self.data:
-                    updated_data = {**self.data}
+                    # Deep-copy crosspoints so mutations in _apply_unsolicited_updates
+                    # don't affect self.data through the shallow top-level copy.
+                    updated_data = {**self.data, "crosspoints": dict(self.data.get("crosspoints") or {})}
                     if self._apply_unsolicited_updates(messages, updated_data):
                         self.async_set_updated_data(updated_data)
             except asyncio.CancelledError:
@@ -340,20 +353,13 @@ class AhmCoordinator(DataUpdateCoordinator):
           - Note On  (9N CH VL): mute state change for channel type N, channel CH
           - CC NRPN  (BN 63 CH, BN 62 17, BN 06 LV): level change
 
+        NRPN state is persisted on ``self._nrpn_state`` so a 3-message sequence
+        split across two drain cycles is never silently dropped.
+
         Returns True if any state value was updated.
         """
-        # Maps MIDI channel N → (data_key, label for logging)
-        _CH_MAP = {
-            0: "inputs",
-            1: "zones",
-            2: "control_groups",
-        }
-
         updated = False
-
-        # NRPN parsing is stateful across three consecutive CC messages.
-        # Track the partial state: {midi_channel_n: (nrpn_msb, nrpn_lsb)}
-        nrpn_state: dict[int, tuple[int | None, int | None]] = {}
+        nrpn_state = self._nrpn_state  # persistent across calls
 
         for msg in messages:
             if not msg:
@@ -419,7 +425,7 @@ class AhmCoordinator(DataUpdateCoordinator):
                     continue  # Note Off — not meaningful here.
                 ch_num = msg[1] + 1  # 0-indexed wire value → 1-indexed channel
                 muted = velocity > 63
-                data_key = _CH_MAP.get(n)
+                data_key = self._CH_MAP.get(n)
                 if data_key and data_key in data and ch_num in data[data_key]:
                     data[data_key][ch_num]["muted"] = muted
                     _LOGGER.debug(
@@ -448,7 +454,7 @@ class AhmCoordinator(DataUpdateCoordinator):
                     if state and state[0] is not None and state[1] == 0x17:
                         # Complete level NRPN for channel type N, channel state[0]
                         ch_num = state[0] + 1  # 0-indexed → 1-indexed
-                        data_key = _CH_MAP.get(n)
+                        data_key = self._CH_MAP.get(n)
                         if data_key and data_key in data and ch_num in data[data_key]:
                             data[data_key][ch_num]["level"] = val
                             _LOGGER.debug(
