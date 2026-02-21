@@ -15,7 +15,6 @@ CONF_VERSION = "version"
 CONF_INPUTS = "inputs"
 CONF_ZONES = "zones"
 CONF_CONTROL_GROUPS = "control_groups"
-CONF_ROOMS = "rooms"
 CONF_INPUT_TO_ZONE_SENDS = "input_to_zone_sends"
 CONF_ZONE_TO_ZONE_SENDS = "zone_to_zone_sends"
 
@@ -28,7 +27,6 @@ UPDATE_INTERVAL = 60  # seconds
 MAX_INPUTS = 64
 MAX_ZONES = 64
 MAX_CONTROL_GROUPS = 32
-MAX_ROOMS = 16
 MAX_PRESETS = 500
 
 # Audio playback channels
@@ -42,7 +40,6 @@ PLAYBACK_CHANNELS = {
 ENTITY_TYPE_INPUT = "input"
 ENTITY_TYPE_ZONE = "zone"
 ENTITY_TYPE_CONTROL_GROUP = "control_group"
-ENTITY_TYPE_ROOM = "room"
 ENTITY_TYPE_CROSSPOINT = "crosspoint"
 ENTITY_TYPE_INPUT_TO_ZONE_SEND = "input_to_zone_send"
 ENTITY_TYPE_ZONE_TO_ZONE_SEND = "zone_to_zone_send"

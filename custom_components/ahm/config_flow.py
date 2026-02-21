@@ -21,13 +21,11 @@ from .const import (
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
-    CONF_ROOMS,
     CONF_INPUT_TO_ZONE_SENDS,
     CONF_ZONE_TO_ZONE_SENDS,
     MAX_INPUTS,
     MAX_ZONES,
     MAX_CONTROL_GROUPS,
-    MAX_ROOMS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -124,9 +122,6 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }),
             vol.Optional(CONF_CONTROL_GROUPS, default=[]): cv.multi_select({
                 str(i): f"Control Group {i}" for i in range(1, MAX_CONTROL_GROUPS + 1)
-            }),
-            vol.Optional(CONF_ROOMS, default=[]): cv.multi_select({
-                str(i): f"Room {i}" for i in range(1, MAX_ROOMS + 1)
             }),
         })
 
@@ -254,9 +249,6 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Optional(CONF_CONTROL_GROUPS, default=cfg.get(CONF_CONTROL_GROUPS, [])): cv.multi_select(
                 {str(i): f"Control Group {i}" for i in range(1, MAX_CONTROL_GROUPS + 1)}
-            ),
-            vol.Optional(CONF_ROOMS, default=cfg.get(CONF_ROOMS, [])): cv.multi_select(
-                {str(i): f"Room {i}" for i in range(1, MAX_ROOMS + 1)}
             ),
         })
 

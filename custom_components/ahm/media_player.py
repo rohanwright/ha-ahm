@@ -18,7 +18,6 @@ from .const import (
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
-    CONF_ROOMS,
     MIN_DB,
     MAX_DB,
 )
@@ -55,13 +54,6 @@ async def async_setup_entry(
         for cg_num in cfg[CONF_CONTROL_GROUPS]:
             entities.append(
                 AhmControlGroupMediaPlayer(coordinator, int(cg_num))
-            )
-
-    # Add room entities
-    if CONF_ROOMS in cfg:
-        for room_num in cfg[CONF_ROOMS]:
-            entities.append(
-                AhmRoomMediaPlayer(coordinator, int(room_num))
             )
 
     async_add_entities(entities)
@@ -203,27 +195,3 @@ class AhmControlGroupMediaPlayer(AhmBaseMediaPlayer):
     async def _async_set_level(self, level: float) -> bool:
         """Set control group level in dB."""
         return await self.coordinator.async_set_control_group_level(self._number, level)
-
-
-class AhmRoomMediaPlayer(AhmBaseMediaPlayer):
-    """AHM room media player entity."""
-
-    def __init__(self, coordinator: AhmCoordinator, room_num: int) -> None:
-        """Initialize the room media player."""
-        super().__init__(coordinator, room_num, "room")
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_room_{room_num}"
-        self._attr_name = f"AHM Room {room_num}"
-
-    def _get_data(self) -> dict[str, Any] | None:
-        """Get room data from coordinator."""
-        if self.coordinator.data and "rooms" in self.coordinator.data:
-            return self.coordinator.data["rooms"].get(self._number)
-        return None
-
-    async def _async_set_mute(self, muted: bool) -> bool:
-        """Set room mute status."""
-        return await self.coordinator.async_set_room_mute(self._number, muted)
-
-    async def _async_set_level(self, level: float) -> bool:
-        """Set room level in dB."""
-        return await self.coordinator.async_set_room_level(self._number, level)

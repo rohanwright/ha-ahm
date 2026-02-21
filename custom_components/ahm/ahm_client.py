@@ -358,12 +358,6 @@ class AhmClient:
         await self.send_sysex_command(f"020109{ch}F7")
         await self.send_sysex_command(f"02010B17{ch}F7")
 
-    async def request_room_state(self, number: int) -> None:
-        """Request current mute and level for a room."""
-        ch = f"{min(max(0, number - 1), 15):02x}"
-        await self.send_sysex_command(f"030109{ch}F7")
-        await self.send_sysex_command(f"03010B17{ch}F7")
-
     # ------------------------------------------------------------------
     # Channel SET commands
     # ------------------------------------------------------------------
@@ -426,26 +420,6 @@ class AhmClient:
             return await self.send_command(bytearray.fromhex(f"B263{ch}B26217B206{lv}"))
         except Exception as err:
             _LOGGER.error("Failed to set control group %d level: %s", number, err)
-            return False
-
-    async def set_room_mute(self, number: int, muted: bool) -> bool:
-        """Set room mute status."""
-        try:
-            ch = f"{min(max(0, number - 1), 15):02x}"
-            vel = "7F" if muted else "3F"
-            return await self.send_command(bytearray.fromhex(f"93{ch}{vel}93{ch}00"))
-        except Exception as err:
-            _LOGGER.error("Failed to set room %d mute: %s", number, err)
-            return False
-
-    async def set_room_level(self, number: int, level: int) -> bool:
-        """Set room level as raw MIDI value (0-127)."""
-        try:
-            ch = f"{min(max(0, number - 1), 15):02x}"
-            lv = f"{max(0, min(127, int(level))):02x}"
-            return await self.send_command(bytearray.fromhex(f"B363{ch}B36217B306{lv}"))
-        except Exception as err:
-            _LOGGER.error("Failed to set room %d level: %s", number, err)
             return False
 
     # ------------------------------------------------------------------

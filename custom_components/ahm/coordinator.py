@@ -20,7 +20,6 @@ from .const import (
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
-    CONF_ROOMS,
     CONF_INPUT_TO_ZONE_SENDS,
     CONF_ZONE_TO_ZONE_SENDS,
 )
@@ -138,7 +137,6 @@ class AhmCoordinator(DataUpdateCoordinator):
             "inputs": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_INPUTS, [])},
             "zones": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_ZONES, [])},
             "control_groups": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_CONTROL_GROUPS, [])},
-            "rooms": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_ROOMS, [])},
             "crosspoints": {},
         }
 
@@ -159,7 +157,7 @@ class AhmCoordinator(DataUpdateCoordinator):
         return data
 
     async def _request_all_channel_states(self) -> None:
-        """Fire GET requests for all configured channel entities (inputs/zones/CGs/rooms).
+        """Fire GET requests for all configured channel entities (inputs/zones/CGs).
 
         Each request sends two SysEx GET packets (mute + level) per entity.
         The AHM responds with identical MIDI to its unsolicited push messages;
@@ -172,8 +170,6 @@ class AhmCoordinator(DataUpdateCoordinator):
             await self.client.request_zone_state(int(num))
         for num in cfg.get(CONF_CONTROL_GROUPS, []):
             await self.client.request_control_group_state(int(num))
-        for num in cfg.get(CONF_ROOMS, []):
-            await self.client.request_room_state(int(num))
 
     async def _collect_crosspoint_data(self, data: dict[str, Any]) -> None:
         """Collect crosspoint (send) data."""
@@ -298,20 +294,6 @@ class AhmCoordinator(DataUpdateCoordinator):
             self._optimistic_update("control_groups", cg_num, "level", level)
         return result
 
-    async def async_set_room_mute(self, room_num: int, muted: bool) -> bool:
-        """Set room mute status."""
-        result = await self.client.set_room_mute(room_num, muted)
-        if result:
-            self._optimistic_update("rooms", room_num, "muted", muted)
-        return result
-
-    async def async_set_room_level(self, room_num: int, level: int) -> bool:
-        """Set room level (raw MIDI 0-127)."""
-        result = await self.client.set_room_level(room_num, level)
-        if result:
-            self._optimistic_update("rooms", room_num, "level", level)
-        return result
-
     async def async_recall_preset(self, preset_num: int) -> bool:
         """Recall a preset."""
         return await self.client.recall_preset(preset_num)
@@ -345,7 +327,6 @@ class AhmCoordinator(DataUpdateCoordinator):
             0: "inputs",
             1: "zones",
             2: "control_groups",
-            3: "rooms",
         }
 
         updated = False

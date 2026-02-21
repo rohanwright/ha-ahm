@@ -12,12 +12,11 @@
       },
       "entities": {
         "title": "Select Entities to Create",
-        "description": "Choose which inputs, zones, control groups, and rooms to control for {name}",
+        "description": "Choose which inputs, zones, and control groups to control for {name}",
         "data": {
           "inputs": "Input Channels",
           "zones": "Zone Outputs",
-          "control_groups": "Control Groups", 
-          "rooms": "Rooms"
+          "control_groups": "Control Groups"
         }
       },
       "zone_crosspoints": {
@@ -41,12 +40,11 @@
     "step": {
       "init": {
         "title": "Update Entity Selection",
-        "description": "Modify which inputs, zones, control groups and rooms are controlled. Crosspoint sends will be reconfigured in the following steps.",
+        "description": "Modify which inputs, zones, and control groups are controlled. Crosspoint sends will be reconfigured in the following steps.",
         "data": {
           "inputs": "Input Channels",
           "zones": "Zone Outputs",
-          "control_groups": "Control Groups",
-          "rooms": "Rooms"
+          "control_groups": "Control Groups"
         }
       },
       "zone_crosspoints": {
