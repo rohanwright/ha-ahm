@@ -38,10 +38,12 @@ class AhmClient:
         crosspoint queries from overlapping.
     """
 
-    def __init__(self, host: str, version: str = "1.5", port: int = 51325) -> None:
+    # SysEx protocol version bytes (hardcoded — this is the protocol version, not firmware).
+    _SYSEX_VERSION = "0100"
+
+    def __init__(self, host: str, port: int = 51325) -> None:
         """Initialize the AHM client."""
         self.host = host
-        self.version = version
         self.port = port
 
         self._reader: asyncio.StreamReader | None = None
@@ -57,12 +59,6 @@ class AhmClient:
         # Parsed inbound MIDI messages (Note On, CC) waiting for the push listener.
         self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
 
-    @property
-    def version_bytestring(self) -> str:
-        """Get firmware version as a 4-char hex string for SysEx messages (e.g. "1.5" → "0105")."""
-        major, minor = self.version.split(".")
-        return str(int(major)).zfill(2) + str(int(minor)).zfill(2)
-
     # ------------------------------------------------------------------
     # Connection management
     # ------------------------------------------------------------------
@@ -77,7 +73,7 @@ class AhmClient:
             )
             _LOGGER.debug(
                 "Connected to AHM at %s:%s (SysEx version bytes: %s)",
-                self.host, self.port, self.version_bytestring,
+                self.host, self.port, self._SYSEX_VERSION,
             )
             # Fresh queue — discard any stale messages from a previous connection.
             self._rx_queue = asyncio.Queue()
@@ -276,7 +272,7 @@ class AhmClient:
     async def send_sysex_command(self, message: str) -> bool:
         """Build and send a SysEx command.  Fire-and-forget."""
         packet = bytearray.fromhex(
-            f"F000001A5012{self.version_bytestring}{message}"
+            f"F000001A5012{self._SYSEX_VERSION}{message}"
         )
         return await self.send_command(bytes(packet))
 

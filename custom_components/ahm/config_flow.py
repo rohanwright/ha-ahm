@@ -14,10 +14,8 @@ from .ahm_client import AhmClient
 from .const import (
     DOMAIN,
     DEFAULT_NAME,
-    DEFAULT_VERSION,
     CONF_HOST,
     CONF_NAME,
-    CONF_VERSION,
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
@@ -60,7 +58,6 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 client = AhmClient(
                     host=user_input[CONF_HOST],
-                    version=user_input[CONF_VERSION],
                 )
                 connected = await client.async_connect()
                 if connected:
@@ -82,7 +79,6 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema({
             vol.Required(CONF_HOST): str,
             vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-            vol.Required(CONF_VERSION, default=DEFAULT_VERSION): str,
         })
 
         return self.async_show_form(
@@ -114,10 +110,10 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Build entity selection schema
         data_schema = vol.Schema({
-            vol.Optional(CONF_INPUTS, default=[str(i) for i in range(1, 17)]): cv.multi_select({
+            vol.Optional(CONF_INPUTS, default=["1"]): cv.multi_select({
                 str(i): f"Input {i}" for i in range(1, MAX_INPUTS + 1)
             }),
-            vol.Optional(CONF_ZONES, default=[str(i) for i in range(1, 9)]): cv.multi_select({
+            vol.Optional(CONF_ZONES, default=["1"]): cv.multi_select({
                 str(i): f"Zone {i}" for i in range(1, MAX_ZONES + 1)
             }),
             vol.Optional(CONF_CONTROL_GROUPS, default=[]): cv.multi_select({
@@ -241,10 +237,10 @@ class AhmOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(data=self._options)
 
         data_schema = vol.Schema({
-            vol.Optional(CONF_INPUTS, default=cfg.get(CONF_INPUTS, [str(i) for i in range(1, 17)])): cv.multi_select(
+            vol.Optional(CONF_INPUTS, default=cfg.get(CONF_INPUTS, ["1"])): cv.multi_select(
                 {str(i): f"Input {i}" for i in range(1, MAX_INPUTS + 1)}
             ),
-            vol.Optional(CONF_ZONES, default=cfg.get(CONF_ZONES, [str(i) for i in range(1, 9)])): cv.multi_select(
+            vol.Optional(CONF_ZONES, default=cfg.get(CONF_ZONES, ["1"])): cv.multi_select(
                 {str(i): f"Zone {i}" for i in range(1, MAX_ZONES + 1)}
             ),
             vol.Optional(CONF_CONTROL_GROUPS, default=cfg.get(CONF_CONTROL_GROUPS, [])): cv.multi_select(

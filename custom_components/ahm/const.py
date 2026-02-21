@@ -6,12 +6,10 @@ DOMAIN: Final = "ahm"
 # Default values
 DEFAULT_NAME = "AHM Zone Mixer"
 DEFAULT_PORT = 51325
-DEFAULT_VERSION = "1.5"
 
 # Configuration
 CONF_HOST = "host"
 CONF_NAME = "name"
-CONF_VERSION = "version" 
 CONF_INPUTS = "inputs"
 CONF_ZONES = "zones"
 CONF_CONTROL_GROUPS = "control_groups"

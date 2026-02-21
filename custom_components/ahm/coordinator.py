@@ -16,7 +16,6 @@ from .const import (
     UPDATE_INTERVAL,
     CONF_HOST,
     CONF_NAME,
-    CONF_VERSION,
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
@@ -35,7 +34,6 @@ class AhmCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.client = AhmClient(
             host=entry.data[CONF_HOST],
-            version=entry.data.get(CONF_VERSION, "1.5")
         )
         self._push_task: asyncio.Task | None = None
 
@@ -88,7 +86,7 @@ class AhmCoordinator(DataUpdateCoordinator):
             "name": self.entry.data[CONF_NAME],
             "manufacturer": "Allen & Heath",
             "model": "AHM Zone Mixer",
-            "sw_version": self.entry.data.get(CONF_VERSION, "1.5"),
+            "sw_version": None,
         }
 
     @property
