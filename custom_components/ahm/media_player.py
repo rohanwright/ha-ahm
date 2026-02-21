@@ -78,6 +78,14 @@ class AhmBaseMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         return self.coordinator.device_info
 
     @property
+    def name(self) -> str:
+        """Return the entity name, using the AHM channel name if one has been fetched."""
+        data = self._get_data()
+        if data and data.get("name"):
+            return data["name"]
+        return self._default_name
+
+    @property
     def state(self) -> MediaPlayerState:
         """Return the state of the media player."""
         if self._get_data() and self._get_data().get("muted"):
@@ -132,7 +140,7 @@ class AhmInputMediaPlayer(AhmBaseMediaPlayer):
         """Initialize the input media player."""
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_{input_num}"
-        self._attr_name = f"AHM Input {input_num}"
+        self._default_name = f"{coordinator.device_name} Input {input_num}"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -156,7 +164,7 @@ class AhmZoneMediaPlayer(AhmBaseMediaPlayer):
         """Initialize the zone media player."""
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_{zone_num}"
-        self._attr_name = f"AHM Zone {zone_num}"
+        self._default_name = f"{coordinator.device_name} Zone {zone_num}"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -180,7 +188,7 @@ class AhmControlGroupMediaPlayer(AhmBaseMediaPlayer):
         """Initialize the control group media player."""
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_{cg_num}"
-        self._attr_name = f"AHM Control Group {cg_num}"
+        self._default_name = f"{coordinator.device_name} Control Group {cg_num}"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""

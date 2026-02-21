@@ -355,6 +355,20 @@ class AhmClient:
         await self.send_sysex_command(f"020109{ch}F7")
         await self.send_sysex_command(f"02010B17{ch}F7")
 
+    async def request_channel_name(self, n: int, number: int) -> None:
+        """Request the display name for a channel (fire-and-forget GET).
+
+        The AHM responds asynchronously with a SysEx name response
+        (cmd byte 0x0A) which the coordinator's push listener will parse.
+
+        Args:
+            n:      Device type byte: 0=input, 1=zone, 2=control_group.
+            number: 1-indexed channel number.
+        """
+        max_ch = 31 if n == 2 else 63
+        ch = f"{min(max(0, number - 1), max_ch):02x}"
+        await self.send_sysex_command(f"{n:02x}09{ch}F7")
+
     # ------------------------------------------------------------------
     # Channel SET commands
     # ------------------------------------------------------------------

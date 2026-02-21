@@ -15,6 +15,7 @@ from .coordinator import AhmCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
+    Platform.BUTTON,
     Platform.NUMBER,
     Platform.SWITCH,
 ]

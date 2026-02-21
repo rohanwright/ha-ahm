@@ -92,11 +92,16 @@ class AhmCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Push listener error: %s", err)
 
     @property
+    def device_name(self) -> str:
+        """Return the user-configured name for this AHM device."""
+        return self.entry.data[CONF_NAME]
+
+    @property
     def device_info(self) -> dict[str, Any]:
         """Return device information."""
         return {
             "identifiers": {(DOMAIN, self.entry.entry_id)},
-            "name": self.entry.data[CONF_NAME],
+            "name": self.device_name,
             "manufacturer": "Allen & Heath",
             "model": "AHM Zone Mixer",
             "sw_version": None,
@@ -210,6 +215,22 @@ class AhmCoordinator(DataUpdateCoordinator):
             await self.client.request_zone_state(int(num))
         for num in cfg.get(CONF_CONTROL_GROUPS, []):
             await self.client.request_control_group_state(int(num))
+
+    async def async_fetch_all_names(self) -> None:
+        """Fire GET name requests for all configured channel entities.
+
+        Requests are sent as fire-and-forget SysEx GETs (cmd 0x09).  The AHM
+        responds with SysEx name responses (cmd 0x0A) which are routed to the
+        rx queue and processed by the push listener the next time it wakes,
+        updating ``data[entity_type][ch_num]["name"]`` and notifying HA.
+        """
+        cfg = self.config
+        for num in cfg.get(CONF_INPUTS, []):
+            await self.client.request_channel_name(0, int(num))
+        for num in cfg.get(CONF_ZONES, []):
+            await self.client.request_channel_name(1, int(num))
+        for num in cfg.get(CONF_CONTROL_GROUPS, []):
+            await self.client.request_channel_name(2, int(num))
 
     async def _collect_crosspoint_data(self, existing: dict[str, Any]) -> dict[str, Any]:
         """Query all configured crosspoints and return a fresh crosspoints dict.
@@ -377,7 +398,7 @@ class AhmCoordinator(DataUpdateCoordinator):
             # SND_CH:  source channel, 0-indexed
             # DEST_CH: destination zone, 0-indexed
             # VALUE:   raw MIDI level (0-127) or mute (>63=muted)
-            if msg[0] == 0xF0 and len(msg) == 15:
+            if msg[0] == 0xF0 and len(msg) == 15 and msg[9] in (0x02, 0x03):
                 snd_n   = msg[8]
                 cmd     = msg[9]
                 snd_ch  = msg[10]  # source channel (same layout as SET command)
@@ -410,6 +431,31 @@ class AhmCoordinator(DataUpdateCoordinator):
                             crosspoint_id, "ON" if muted else "OFF",
                         )
                         updated = True
+                continue
+
+            # ---- SysEx: channel name response (cmd 0x0A) --------------------
+            # The AHM sends this in response to a GET name request.
+            # Format: F0 00 00 1A 50 12 VV VV  N  0A  CH  <name bytes>  F7
+            #   N:    device type byte (00=input, 01=zone, 02=control_group)
+            #   CH:   0-indexed channel number
+            #   name: up to 8 ASCII bytes (no null terminator)
+            if msg[0] == 0xF0 and len(msg) >= 12 and msg[9] == 0x0A:
+                n_byte  = msg[8]   # device type (matches _CH_MAP key)
+                ch_byte = msg[10]  # 0-indexed channel
+                raw_name = bytes(msg[11:-1])  # bytes between CH and F7 terminator
+                try:
+                    name = raw_name.decode("ascii").strip()
+                except (UnicodeDecodeError, ValueError):
+                    name = ""
+                data_key = self._CH_MAP.get(n_byte)
+                ch_num = ch_byte + 1  # 1-indexed
+                if data_key and data_key in data and ch_num in data[data_key]:
+                    data[data_key][ch_num]["name"] = name or None
+                    _LOGGER.debug(
+                        "Channel name response: %s %d → %r",
+                        data_key, ch_num, name,
+                    )
+                    updated = True
                 continue
 
             status = msg[0]

@@ -90,6 +90,14 @@ class AhmBaseMuteSwitch(CoordinatorEntity, SwitchEntity):
         return self.coordinator.device_info
 
     @property
+    def name(self) -> str:
+        """Return the entity name, using the AHM channel name if one has been fetched."""
+        data = self._get_data()
+        if data and data.get("name"):
+            return f"{data['name']} Mute"
+        return self._default_name
+
+    @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on (muted)."""
         data = self._get_data()
@@ -124,7 +132,7 @@ class AhmInputMuteSwitch(AhmBaseMuteSwitch):
         """Initialize the input mute switch."""
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_mute_{input_num}"
-        self._attr_name = f"AHM Input {input_num} Mute"
+        self._default_name = f"{coordinator.device_name} Input {input_num} Mute"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -144,7 +152,7 @@ class AhmZoneMuteSwitch(AhmBaseMuteSwitch):
         """Initialize the zone mute switch."""
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_mute_{zone_num}"
-        self._attr_name = f"AHM Zone {zone_num} Mute"
+        self._default_name = f"{coordinator.device_name} Zone {zone_num} Mute"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -164,7 +172,7 @@ class AhmControlGroupMuteSwitch(AhmBaseMuteSwitch):
         """Initialize the control group mute switch."""
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_mute_{cg_num}"
-        self._attr_name = f"AHM Control Group {cg_num} Mute"
+        self._default_name = f"{coordinator.device_name} Control Group {cg_num} Mute"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""
@@ -196,7 +204,7 @@ class AhmCrosspointMuteSwitch(CoordinatorEntity, SwitchEntity):
         self._is_zone_to_zone = is_zone_to_zone
 
         source_type = "Zone" if is_zone_to_zone else "Input"
-        self._attr_name = f"{source_type} {source_num} to Zone {dest_zone} Send Mute"
+        self._attr_name = f"{coordinator.device_name} {source_type} {source_num} to Zone {dest_zone} Send Mute"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{crosspoint_id}_mute"
 
     @property

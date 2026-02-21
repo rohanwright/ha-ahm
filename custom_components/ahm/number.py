@@ -96,6 +96,14 @@ class AhmBaseLevelNumber(CoordinatorEntity, NumberEntity):
         return self.coordinator.device_info
 
     @property
+    def name(self) -> str:
+        """Return the entity name, using the AHM channel name if one has been fetched."""
+        data = self._get_data()
+        if data and data.get("name"):
+            return f"{data['name']} Level"
+        return self._default_name
+
+    @property
     def native_value(self) -> int | None:
         """Return the current value (raw MIDI 0-127)."""
         data = self._get_data()
@@ -123,7 +131,7 @@ class AhmInputLevelNumber(AhmBaseLevelNumber):
         """Initialize the input level number."""
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_level_{input_num}"
-        self._attr_name = f"AHM Input {input_num} Level"
+        self._default_name = f"{coordinator.device_name} Input {input_num} Level"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -143,7 +151,7 @@ class AhmZoneLevelNumber(AhmBaseLevelNumber):
         """Initialize the zone level number."""
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_level_{zone_num}"
-        self._attr_name = f"AHM Zone {zone_num} Level"
+        self._default_name = f"{coordinator.device_name} Zone {zone_num} Level"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -163,7 +171,7 @@ class AhmControlGroupLevelNumber(AhmBaseLevelNumber):
         """Initialize the control group level number."""
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_level_{cg_num}"
-        self._attr_name = f"AHM Control Group {cg_num} Level"
+        self._default_name = f"{coordinator.device_name} Control Group {cg_num} Level"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""
@@ -195,7 +203,7 @@ class AhmCrosspointLevelNumber(CoordinatorEntity, NumberEntity):
         self._is_zone_to_zone = is_zone_to_zone
 
         source_type = "Zone" if is_zone_to_zone else "Input"
-        self._attr_name = f"{source_type} {source_num} to Zone {dest_zone} Send Level"
+        self._attr_name = f"{coordinator.device_name} {source_type} {source_num} to Zone {dest_zone} Send Level"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{crosspoint_id}_level"
         self._attr_native_min_value = MIDI_LEVEL_MIN
         self._attr_native_max_value = MIDI_LEVEL_MAX
