@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2026-02-22
+## [1.1.0] - 2026-02-22
 
 ### Added
 - New `sensor` platform with two diagnostic entities:
@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardized fallback entity names to channel/function only (device name no longer embedded in fallback name strings)
 - Preserved stable, device-prefixed suggested object IDs for new entities so IDs follow the `Device_Type_Number_Function` pattern (slugified by Home Assistant to lowercase)
 - Standardized crosspoint friendly naming to **Destination → Source → Function** for both level and mute entities
+- Added automatic refresh after 3 seconds when a scene is recalled
 
 ### Notes
 - Existing entity IDs already stored in Home Assistant's entity registry are unchanged; only newly created entities use the updated suggested object ID pattern
