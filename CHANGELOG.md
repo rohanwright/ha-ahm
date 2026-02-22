@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.1] - 2026-02-22
 
+### Added
+- New `sensor` platform with two diagnostic entities:
+	- **Last Recalled Preset** sensor, updated from incoming preset recall MIDI (bank select + program change) and shown as `Preset N`
+	- **Connection Status** sensor showing `Connected` / `Disconnected` based on coordinator connectivity checks
+
 ### Changed
 - Adopted Home Assistant modern entity naming (`_attr_has_entity_name = True`) across number, switch, media_player, and button entities
 - Standardized fallback entity names to channel/function only (device name no longer embedded in fallback name strings)

@@ -12,6 +12,7 @@ A Home Assistant custom integration for controlling Allen & Heath AHM Zone Mixer
 - **Number Entities**: Raw MIDI level control (0–127) for inputs, zones, control groups, and crosspoint sends
 - **Switch Entities**: Dedicated mute/unmute controls with volume icons
 - **Crosspoint (Send) Controls**: Level and mute for input-to-zone and zone-to-zone sends
+- **Diagnostic Sensors**: Last recalled preset and current connection status for troubleshooting
 - **Channel Name Sync**: Fetch display names programmed on the AHM device — entities rename automatically and names persist across restarts
 - **Multi-device Support**: Each device is identified by its configured name, so entities are unambiguous when multiple AHM units are present
 - **Model Selection**: AHM-16, AHM-32, and AHM-64 — entity selection is constrained to the actual channel count
@@ -70,6 +71,11 @@ For each configured crosspoint (send):
 - **Number**: Send level control (raw MIDI 0–127)
 - **Switch**: Send mute toggle
 
+Always created diagnostic entities:
+
+- **Sensor**: Last Recalled Preset (shows `Preset N` from the last preset recall message received from the AHM)
+- **Sensor**: Connection Status (`Connected` / `Disconnected`)
+
 ### Reconfiguring After Setup
 
 Open **Settings → Devices & Services**, find your AHM device, and click **Configure**. The options flow pre-populates all current selections. If channel names have previously been fetched they will already appear in the selection lists.
@@ -110,6 +116,11 @@ When you configure crosspoint controls, entities are created with descriptive na
 - `switch.foyer_spotify_mute` — mutes/unmutes that send
 - `number.ahm_1_input_1_to_zone_3_send_level` — same entity before names are fetched
 - `switch.ahm_1_input_1_to_zone_3_send_mute` — same entity before names are fetched
+
+### Diagnostic Sensor Examples
+
+- `sensor.ahm_1_last_recalled_preset` — `Preset 1`, `Preset 42`, etc. (latest received from the device)
+- `sensor.ahm_1_connection_status` — `Connected` or `Disconnected`
 
 ## Services
 

@@ -15,8 +15,10 @@ from .ahm_client import AhmClient
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
+    MAX_PRESETS,
     CONF_HOST,
     CONF_NAME,
+    CONF_MODEL,
     CONF_INPUTS,
     CONF_ZONES,
     CONF_CONTROL_GROUPS,
@@ -54,6 +56,9 @@ class AhmCoordinator(DataUpdateCoordinator):
         # Flag set by _apply_unsolicited_updates when a name response arrives;
         # cleared by the push listener loop after saving to storage.
         self._names_dirty: bool = False
+        # Tracks last received Bank Select MSB (CC00) per MIDI channel for
+        # reconstructing preset numbers from Program Change messages.
+        self._preset_bank_msb: dict[int, int] = {}
 
         super().__init__(
             hass,
@@ -109,12 +114,15 @@ class AhmCoordinator(DataUpdateCoordinator):
     @property
     def device_info(self) -> dict[str, Any]:
         """Return device information."""
+        host = self.entry.data[CONF_HOST]
+        model = self.entry.data.get(CONF_MODEL, "AHM")
         return {
             "identifiers": {(DOMAIN, self.entry.entry_id)},
             "name": self.device_name,
             "manufacturer": "Allen & Heath",
-            "model": "AHM Zone Mixer",
-            "sw_version": None,
+            "model": model,
+            "sw_version": f"IP {host}",
+            "configuration_url": f"http://{host}",
         }
 
     @property
@@ -147,6 +155,7 @@ class AhmCoordinator(DataUpdateCoordinator):
 
             # Periodic poll: refresh channel states (inputs/zones/CGs).
             updated = {**self.data}
+            updated["connected"] = await self.client.test_connection()
             await self._request_all_channel_states()
             await asyncio.sleep(0.5)
             messages = self.client.drain_queue()
@@ -182,6 +191,8 @@ class AhmCoordinator(DataUpdateCoordinator):
             "zones": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_ZONES, [])},
             "control_groups": {int(n): {"muted": None, "level": None} for n in cfg.get(CONF_CONTROL_GROUPS, [])},
             "crosspoints": {},
+            "last_recalled_preset": None,
+            "connected": await self.client.test_connection(),
         }
 
         # Fire off GET requests for all channel entities (fire-and-forget).
@@ -449,6 +460,7 @@ class AhmCoordinator(DataUpdateCoordinator):
         """
         updated = False
         nrpn_state = self._nrpn_state  # persistent across calls
+        preset_bank_msb = self._preset_bank_msb
 
         for msg in messages:
             if not msg:
@@ -561,6 +573,12 @@ class AhmCoordinator(DataUpdateCoordinator):
                 cc = msg[1]
                 val = msg[2]
 
+                # Bank Select MSB (CC00): used with Program Change to
+                # reconstruct preset recalls (bank * 128 + program + 1).
+                if cc == 0x00:
+                    preset_bank_msb[n] = val
+                    continue
+
                 if cc == 0x63:   # NRPN MSB: channel index
                     nrpn_state[n] = (val, None)
                 elif cc == 0x62:  # NRPN LSB: parameter ID
@@ -580,6 +598,21 @@ class AhmCoordinator(DataUpdateCoordinator):
                             )
                             updated = True
                     nrpn_state.pop(n, None)  # Reset state after value byte.
+                continue
+
+            # ---- Program Change: preset recall ------------------------------
+            # Recall commands use Bank Select (CC00) followed by Program Change:
+            #   B0 00 <bank>  C0 <program>
+            # Preset number is 1-indexed across banks of 128.
+            if msg_type == 0xC0 and len(msg) == 2:
+                program = msg[1]
+                bank = preset_bank_msb.get(n, 0)
+                preset_num = (bank * 128) + program + 1
+                if 1 <= preset_num <= MAX_PRESETS:
+                    if data.get("last_recalled_preset") != preset_num:
+                        data["last_recalled_preset"] = preset_num
+                        _LOGGER.debug("Unsolicited preset recall: preset %d", preset_num)
+                        updated = True
                 continue
 
         return updated
