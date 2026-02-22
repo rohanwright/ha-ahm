@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 [![GitHub release](https://img.shields.io/github/release/rohanwright/ha-ahm.svg)](https://github.com/rohanwright/ha-ahm/releases/)
-[![License](https://img.shields.io/github/license/user/ha-ahm.svg)](LICENSE)
+[![License](https://img.shields.io/github/license/rohanwright/ha-ahm.svg)](LICENSE)
 
 A Home Assistant custom integration for controlling Allen & Heath AHM Zone Mixer devices over TCP/IP using the AHM TCP/IP Protocol V1.5.
 
