@@ -78,11 +78,14 @@ async def async_setup_entry(
 class AhmBaseMuteSwitch(CoordinatorEntity, SwitchEntity):
     """Base class for AHM mute switch entities."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AhmCoordinator, number: int, entity_type: str) -> None:
         """Initialize the switch entity."""
         super().__init__(coordinator)
         self._number = number
         self._entity_type = entity_type
+        self._attr_suggested_object_id = f"{coordinator.device_name}_{entity_type}_{number}_mute"
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -132,7 +135,7 @@ class AhmInputMuteSwitch(AhmBaseMuteSwitch):
         """Initialize the input mute switch."""
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_mute_{input_num}"
-        self._default_name = f"{coordinator.device_name} Input {input_num} Mute"
+        self._default_name = f"Input {input_num} Mute"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -152,7 +155,7 @@ class AhmZoneMuteSwitch(AhmBaseMuteSwitch):
         """Initialize the zone mute switch."""
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_mute_{zone_num}"
-        self._default_name = f"{coordinator.device_name} Zone {zone_num} Mute"
+        self._default_name = f"Zone {zone_num} Mute"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -172,7 +175,7 @@ class AhmControlGroupMuteSwitch(AhmBaseMuteSwitch):
         """Initialize the control group mute switch."""
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_mute_{cg_num}"
-        self._default_name = f"{coordinator.device_name} Control Group {cg_num} Mute"
+        self._default_name = f"Control Group {cg_num} Mute"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""
@@ -187,6 +190,8 @@ class AhmControlGroupMuteSwitch(AhmBaseMuteSwitch):
 
 class AhmCrosspointMuteSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an AHM crosspoint (send) mute switch."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -204,8 +209,9 @@ class AhmCrosspointMuteSwitch(CoordinatorEntity, SwitchEntity):
         self._is_zone_to_zone = is_zone_to_zone
 
         source_type = "Zone" if is_zone_to_zone else "Input"
-        self._default_name = f"{coordinator.device_name} {source_type} {source_num} to Zone {dest_zone} Send Mute"
+        self._default_name = f"Zone {dest_zone} {source_type} {source_num} Send Mute"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{crosspoint_id}_mute"
+        self._attr_suggested_object_id = f"{coordinator.device_name}_{crosspoint_id}_send_mute"
 
     def _channel_name(self, entity_type: str, number: int) -> str | None:
         """Return the fetched AHM display name for a channel, or None if not yet available."""

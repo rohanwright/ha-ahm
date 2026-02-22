@@ -80,11 +80,14 @@ async def async_setup_entry(
 class AhmBaseLevelNumber(CoordinatorEntity, NumberEntity):
     """Base class for AHM level number entities."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AhmCoordinator, number: int, entity_type: str) -> None:
         """Initialize the number entity."""
         super().__init__(coordinator)
         self._number = number
         self._entity_type = entity_type
+        self._attr_suggested_object_id = f"{coordinator.device_name}_{entity_type}_{number}_level"
         self._attr_native_min_value = MIDI_LEVEL_MIN
         self._attr_native_max_value = MIDI_LEVEL_MAX
         self._attr_native_step = 1
@@ -131,7 +134,7 @@ class AhmInputLevelNumber(AhmBaseLevelNumber):
         """Initialize the input level number."""
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_level_{input_num}"
-        self._default_name = f"{coordinator.device_name} Input {input_num} Level"
+        self._default_name = f"Input {input_num} Level"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -151,7 +154,7 @@ class AhmZoneLevelNumber(AhmBaseLevelNumber):
         """Initialize the zone level number."""
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_level_{zone_num}"
-        self._default_name = f"{coordinator.device_name} Zone {zone_num} Level"
+        self._default_name = f"Zone {zone_num} Level"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -171,7 +174,7 @@ class AhmControlGroupLevelNumber(AhmBaseLevelNumber):
         """Initialize the control group level number."""
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_level_{cg_num}"
-        self._default_name = f"{coordinator.device_name} Control Group {cg_num} Level"
+        self._default_name = f"Control Group {cg_num} Level"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""
@@ -186,6 +189,8 @@ class AhmControlGroupLevelNumber(AhmBaseLevelNumber):
 
 class AhmCrosspointLevelNumber(CoordinatorEntity, NumberEntity):
     """Representation of an AHM crosspoint (send) level number entity."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -203,8 +208,9 @@ class AhmCrosspointLevelNumber(CoordinatorEntity, NumberEntity):
         self._is_zone_to_zone = is_zone_to_zone
 
         source_type = "Zone" if is_zone_to_zone else "Input"
-        self._default_name = f"{coordinator.device_name} {source_type} {source_num} to Zone {dest_zone} Send Level"
+        self._default_name = f"Zone {dest_zone} {source_type} {source_num} Send Level"
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{crosspoint_id}_level"
+        self._attr_suggested_object_id = f"{coordinator.device_name}_{crosspoint_id}_send_level"
         self._attr_native_min_value = MIDI_LEVEL_MIN
         self._attr_native_max_value = MIDI_LEVEL_MAX
         self._attr_native_step = 1

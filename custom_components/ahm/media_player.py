@@ -62,11 +62,14 @@ async def async_setup_entry(
 class AhmBaseMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     """Base class for AHM media player entities."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: AhmCoordinator, number: int, entity_type: str) -> None:
         """Initialize the media player."""
         super().__init__(coordinator)
         self._number = number
         self._entity_type = entity_type
+        self._attr_suggested_object_id = f"{coordinator.device_name}_{entity_type}_{number}"
         self._attr_supported_features = (
             MediaPlayerEntityFeature.VOLUME_SET
             | MediaPlayerEntityFeature.VOLUME_MUTE
@@ -140,7 +143,7 @@ class AhmInputMediaPlayer(AhmBaseMediaPlayer):
         """Initialize the input media player."""
         super().__init__(coordinator, input_num, "input")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_input_{input_num}"
-        self._default_name = f"{coordinator.device_name} Input {input_num}"
+        self._default_name = f"Input {input_num}"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get input data from coordinator."""
@@ -164,7 +167,7 @@ class AhmZoneMediaPlayer(AhmBaseMediaPlayer):
         """Initialize the zone media player."""
         super().__init__(coordinator, zone_num, "zone")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_zone_{zone_num}"
-        self._default_name = f"{coordinator.device_name} Zone {zone_num}"
+        self._default_name = f"Zone {zone_num}"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get zone data from coordinator."""
@@ -188,7 +191,7 @@ class AhmControlGroupMediaPlayer(AhmBaseMediaPlayer):
         """Initialize the control group media player."""
         super().__init__(coordinator, cg_num, "control_group")
         self._attr_unique_id = f"{coordinator.entry.entry_id}_control_group_{cg_num}"
-        self._default_name = f"{coordinator.device_name} Control Group {cg_num}"
+        self._default_name = f"Control Group {cg_num}"
 
     def _get_data(self) -> dict[str, Any] | None:
         """Get control group data from coordinator."""

@@ -86,6 +86,22 @@ Press the **Fetch Channel Names** button (found under the device's configuration
 
 Names survive integration reloads and Home Assistant restarts — you only need to press the button again when names are changed on the device.
 
+### Entity Naming and IDs
+
+This integration uses Home Assistant's modern entity naming model:
+
+- Entities are created with `_attr_has_entity_name = True`
+- Entity display names come from the AHM when available (for example `Spotify Level`)
+- Fallback names are simple channel/function names (for example `Input 1 Level`, `Zone 3 Mute`)
+- Crosspoint friendly names always use **Destination → Source → Function** ordering (for example `Foyer Spotify Level`)
+
+Entity IDs are intentionally kept stable using suggested object IDs. They use the device name prefix plus type/number/function pattern, then Home Assistant slugifies to lowercase:
+
+- Source pattern: `AHM_Input_1_Level`
+- Actual entity ID: `number.ahm_input_1_level`
+
+> Note: Existing entity IDs already stored in Home Assistant's entity registry are not automatically renamed by integration updates.
+
 ### Crosspoint Entity Examples
 
 When you configure crosspoint controls, entities are created with descriptive names. Examples with a device named `AHM 1` and Input 1 = "Spotify", Zone 3 = "Foyer":

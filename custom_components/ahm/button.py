@@ -35,12 +35,14 @@ class AhmFetchNamesButton(CoordinatorEntity, ButtonEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:tag-multiple"
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: AhmCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_fetch_names"
-        self._attr_name = f"{coordinator.device_name} Fetch Channel Names"
+        self._attr_suggested_object_id = f"{coordinator.device_name}_fetch_channel_names"
+        self._attr_name = "Fetch Channel Names"
 
     @property
     def device_info(self) -> dict[str, Any]:

@@ -5,9 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] - 2026-02-22
 
-## [1.2.0] - 2025-07-09
+### Changed
+- Adopted Home Assistant modern entity naming (`_attr_has_entity_name = True`) across number, switch, media_player, and button entities
+- Standardized fallback entity names to channel/function only (device name no longer embedded in fallback name strings)
+- Preserved stable, device-prefixed suggested object IDs for new entities so IDs follow the `Device_Type_Number_Function` pattern (slugified by Home Assistant to lowercase)
+- Standardized crosspoint friendly naming to **Destination → Source → Function** for both level and mute entities
+
+### Notes
+- Existing entity IDs already stored in Home Assistant's entity registry are unchanged; only newly created entities use the updated suggested object ID pattern
+
+## [1.0.0] - 2026-02-21
 
 ### Added
 - **Channel Name Sync**: New "Fetch Channel Names" button entity requests display names from the AHM for all configured channels. Entities are renamed immediately (e.g. `Spotify Level`, `Foyer Mute`, `Foyer Spotify Level`)
@@ -25,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - NUL byte padding in AHM name responses is now stripped correctly; unnamed channels no longer appear with NUL characters in their entity names
 
-## [1.0.0] - 2025-06-23
+## [0.0.1] - 2025-06-23
 
 ### Added
 - Initial release of AHM Zone Mixer integration
