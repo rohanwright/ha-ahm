@@ -59,6 +59,8 @@ class AhmCoordinator(DataUpdateCoordinator):
         # Tracks last received Bank Select MSB (CC00) per MIDI channel for
         # reconstructing preset numbers from Program Change messages.
         self._preset_bank_msb: dict[int, int] = {}
+        # Debounced task that requests a full refresh shortly after preset recall.
+        self._post_preset_refresh_task: asyncio.Task | None = None
 
         super().__init__(
             hass,
@@ -437,6 +439,13 @@ class AhmCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Close the persistent connection and stop background tasks."""
+        if self._post_preset_refresh_task is not None:
+            self._post_preset_refresh_task.cancel()
+            try:
+                await self._post_preset_refresh_task
+            except asyncio.CancelledError:
+                pass
+            self._post_preset_refresh_task = None
         if self._push_task is not None:
             self._push_task.cancel()
             try:
@@ -445,6 +454,27 @@ class AhmCoordinator(DataUpdateCoordinator):
                 pass
             self._push_task = None
         await self.client.async_disconnect()
+
+    def _schedule_post_preset_refresh(self) -> None:
+        """Schedule a full state refresh 3 seconds after a preset recall.
+
+        The AHM does not emit all changed channel/crosspoint values after recall,
+        so this delayed refresh pulls authoritative post-recall state.
+        """
+        if self._post_preset_refresh_task is not None and not self._post_preset_refresh_task.done():
+            self._post_preset_refresh_task.cancel()
+        self._post_preset_refresh_task = asyncio.create_task(self._async_post_preset_refresh())
+
+    async def _async_post_preset_refresh(self) -> None:
+        """Wait briefly after recall, then request a coordinator refresh."""
+        try:
+            await asyncio.sleep(3)
+            await self.async_request_refresh()
+            _LOGGER.debug("Post-preset delayed refresh completed")
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.debug("Post-preset delayed refresh failed: %s", err)
 
     def _apply_unsolicited_updates(self, messages: list[bytes], data: dict[str, Any]) -> bool:
         """Parse unsolicited MIDI messages pushed by the AHM and apply to *data*.
@@ -612,6 +642,7 @@ class AhmCoordinator(DataUpdateCoordinator):
                     if data.get("last_recalled_preset") != preset_num:
                         data["last_recalled_preset"] = preset_num
                         _LOGGER.debug("Unsolicited preset recall: preset %d", preset_num)
+                        self._schedule_post_preset_refresh()
                         updated = True
                 continue
 
