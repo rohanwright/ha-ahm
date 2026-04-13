@@ -26,6 +26,13 @@
           "input_sends": "Input-to-Zone Sends",
           "zone_sends": "Zone-to-Zone Sends"
         }
+      },
+      "reconfigure": {
+        "title": "Update IP Address",
+        "description": "Enter the new IP address for your Allen & Heath AHM Zone Mixer. All other settings will be preserved.",
+        "data": {
+          "host": "IP Address"
+        }
       }
     },
     "error": {
@@ -33,7 +40,8 @@
       "unknown": "Unexpected error occurred"
     },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "reconfigure_successful": "IP address updated successfully. The integration will now reload."
     }
   },
   "options": {

@@ -98,6 +98,41 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow handler."""
         return AhmOptionsFlow(config_entry)
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle a reconfigure flow to update the device IP address."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            new_host = user_input[CONF_HOST]
+            try:
+                client = AhmClient(host=new_host)
+                connected = await client.async_connect()
+                if connected:
+                    await client.async_disconnect()
+                    self.async_update_entry(
+                        entry,
+                        data={**entry.data, CONF_HOST: new_host},
+                    )
+                    return self.async_abort(reason="reconfigure_successful")
+                else:
+                    errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "unknown"
+
+        data_schema = vol.Schema({
+            vol.Required(CONF_HOST, default=entry.data.get(CONF_HOST, "")): str,
+        })
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=data_schema,
+            errors=errors,
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
