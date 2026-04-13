@@ -112,11 +112,10 @@ class AhmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 connected = await client.async_connect()
                 if connected:
                     await client.async_disconnect()
-                    self.async_update_entry(
+                    return self.async_update_and_abort(
                         entry,
                         data={**entry.data, CONF_HOST: new_host},
                     )
-                    return self.async_abort(reason="reconfigure_successful")
                 else:
                     errors["base"] = "cannot_connect"
             except Exception:
